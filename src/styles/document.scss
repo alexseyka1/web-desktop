@@ -1,0 +1,20 @@
+html,
+body {
+  margin: 0;
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+}
+
+body {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#windows {
+  position: relative;
+  background-color: darkslategray;
+  overflow: auto;
+  flex: 1;
+}

@@ -1,0 +1,75 @@
+.bottom-bar {
+  $bottomBarPadding: 0.25rem;
+
+  height: 1.5rem;
+  background-color: #7e9494;
+  display: flex;
+  flex-direction: row;
+  gap: 0.5rem;
+  padding: $bottomBarPadding;
+  user-select: none;
+
+  &__start {
+    font-size: 0.875rem;
+    margin: -$bottomBarPadding;
+    margin-left: 0;
+    padding: $bottomBarPadding calc($bottomBarPadding * 2);
+    line-height: 1rem;
+    background-color: #455a64;
+    color: white;
+    white-space: nowrap;
+
+    &:hover {
+      background-color: #546e7a;
+    }
+    &:active {
+      text-shadow: 1px 1px .25rem black;
+    }
+  }
+
+  &__left-buttons, 
+  &__windows, 
+  &__right-buttons {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  
+  &__windows {
+    flex: 1;
+  }
+
+  &__item {
+    height: 100%;
+    background: rgba(255,255,255,0.5);
+    display: flex;
+    flex-direction: row;
+    padding: 0 .25rem;
+    gap: .25rem;
+    justify-content: flex-start;
+    align-items: center;
+    max-width: 20%;
+    font-size: 0.875rem;
+    flex: 1;
+
+    &.active {
+      background-color: white;
+    }
+  }
+}
+
+.bottom-bar-item {
+  &__icon {
+    height: 75%;
+    aspect-ratio: 1;
+    background: rgba(0,0,0,0.75);
+  }
+
+  &__window-name {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+}
