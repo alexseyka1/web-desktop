@@ -3,6 +3,7 @@ import RandomColor from "../../applications/RandomColor"
 import NotePad from "../../applications/Notepad"
 import WindowSystem from "../WindowSystem"
 import "../../styles/desktop.scss"
+import "../../styles/files-grid.scss"
 
 const APPLICATIONS = [
   {
@@ -47,14 +48,14 @@ class Desktop extends EventTarget {
     this.render()
 
     this.domElement.addEventListener("mousedown", () => {
-      this.domElement.querySelector(".desktop-app.active")?.classList.remove("active")
+      this.domElement.querySelector(".files-grid-item.active")?.classList.remove("active")
     })
   }
 
   get domElement() {
     if (!this.#domElement) {
       this.#domElement = document.createElement("desktop")
-      this.#domElement.className = "desktop"
+      this.#domElement.className = "files-grid desktop"
     }
 
     return this.#domElement
@@ -63,16 +64,16 @@ class Desktop extends EventTarget {
   render() {
     APPLICATIONS.forEach((app) => {
       const appLink = document.createElement("div")
-      appLink.className = "desktop-app"
+      appLink.className = "files-grid-item"
       appLink.innerHTML = `
-        <div class="desktop-app__icon">${app.icon || ""}</div>
-        <div class="desktop-app__title" title="${app.title || ""}">${app.title || ""}</div>
+        <div class="files-grid-item__icon">${app.icon || ""}</div>
+        <div class="files-grid-item__title" title="${app.title || ""}">${app.title || ""}</div>
       `
       this.domElement.append(appLink)
 
       appLink.addEventListener("mousedown", (e) => {
         e.stopPropagation()
-        this.domElement.querySelector(".desktop-app.active")?.classList.remove("active")
+        this.domElement.querySelector(".files-grid-item.active")?.classList.remove("active")
         appLink.classList.add("active")
       })
 

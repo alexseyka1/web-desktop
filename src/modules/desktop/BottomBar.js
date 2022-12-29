@@ -119,8 +119,8 @@ class BottomBar {
 
     this.windowSystem.windows.forEach((_window) => {
       const getWindowTitle = () => `
-        <div class="bottom-bar-item__icon"></div>
-        <div class="bottom-bar-item__window-name">${_window.title}</div>
+        <div class="bottom-bar-item__icon">${_window.icon || ""}</div>
+        <div class="bottom-bar-item__window-name">${_window.title || ""}</div>
       `
       const menuBarItem = document.createElement("div")
       menuBarItem.className = `bottom-bar__item ${this.windowSystem.windowInFocus === _window ? "active" : ""}`

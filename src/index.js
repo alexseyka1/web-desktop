@@ -1,17 +1,26 @@
 import WindowSystem, { WindowSystemEvents } from "./modules/WindowSystem"
-import "./styles/window.scss"
 import "./styles/document.scss"
 import "./styles/dropdown-menu.scss"
 import Desktop from "./modules/desktop"
 import BottomBar from "./modules/desktop/BottomBar"
-import NotePad from "./applications/Notepad"
+import FileExplorer from "./applications/FileExplorer"
+import fileSystem, { FILE_SYSTEM_EVENTS } from "./applications/FileExplorer/FileSystem"
+import ImageViewer from "./applications/ImageViewer"
 
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", async () => {
+  if (!(await fileSystem.getIsCreated())) {
+    fileSystem.addEventListener(FILE_SYSTEM_EVENTS.CREATED, () => {
+      setTimeout(() => window.location.reload())
+    })
+    fileSystem.dispatchEvent(new Event(FILE_SYSTEM_EVENTS.CREATE))
+    return
+  }
+
   /**
    * WINDOW SYSTEM
    */
   const windowSystem = new WindowSystem(document.getElementById("windows"))
-  windowSystem.attach(new NotePad({ x: 250, y: 200, width: 350, height: 350 }))
+  windowSystem.attach(new FileExplorer({ x: 250, y: 200, width: 350, height: 350 }))
   windowSystem.run()
 
   /**

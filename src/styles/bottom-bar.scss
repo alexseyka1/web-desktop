@@ -64,7 +64,13 @@
   &__icon {
     height: 75%;
     aspect-ratio: 1;
-    background: rgba(0,0,0,0.75);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    
+    &:empty {
+      background: rgba(0,0,0,0.75);
+    }
   }
 
   &__window-name {

@@ -1,0 +1,61 @@
+@keyframes openWindow {
+  from {
+    height: 0;
+    transform: scale(0.5);
+  }
+}
+
+.window-message {
+  animation: openWindow 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+  &__success {}
+  &__info {}
+  &__warning {}
+  &__error {}
+
+  &__content {
+    flex: 1;
+    display: flex;
+    flex-direction: row;
+  }
+
+  &__actions {
+    background-color: #f4f4f4;
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.25rem;
+    box-shadow: 0 -1px 0.5rem 0 rgba(150, 150, 150, 0.3);
+  }
+
+  & .content {
+    line-height: 1rem;
+    overflow: hidden;
+  }
+
+  &__icon, &__message {
+    padding: 2rem 0.5rem;
+  }
+
+  &__icon {
+    flex: 1;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    font-size: 3rem;
+    line-height: 3rem;
+    background-color: #f4f4f4;
+    user-select: none;
+  }
+  &__message {
+    flex: 3;
+    font-size: 0.875rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    overflow-y: auto;
+
+    & :first-child {
+      font-weight: 600;
+    }
+  }
+}

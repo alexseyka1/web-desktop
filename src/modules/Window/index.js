@@ -1,6 +1,7 @@
-import Vector from "./Vector"
-import Helper, { withSharedValue } from "./Helper"
-import { addDropdownSubMenu, withMenuPanel } from "./MenuPanel"
+import Vector from "../Vector"
+import Helper, { withSharedValue } from "../Helper"
+import { addDropdownSubMenu, withMenuPanel } from "../MenuPanel"
+import "./styles.scss"
 
 export const WindowEvents = {
   MINIFY: "window-minify",
@@ -36,15 +37,18 @@ class Window extends EventTarget {
   minSize = new Vector(100, 100)
   maxSize /* = new Vector(300, 300)*/
   isResizable = true
+  isModal = false
   isMaximized = false
   withHeader = true
 
   constructor(params) {
     super()
     const self = this
-    const { x, y, width, height, minWidth, minHeight, title, withHeader = true, isResizable = true } = params || {}
-
-    if (isResizable !== undefined) this.isResizable = isResizable
+    const { x, y, width, height, minWidth, minHeight, title } = params || {}
+    Object.keys(params).forEach((param) => {
+      if (!(param in this)) return
+      this[param] = params[param]
+    })
 
     this.#createHtml()
 
@@ -81,7 +85,6 @@ class Window extends EventTarget {
     if (minWidth) this.minSize.x = minWidth
     if (minHeight) this.minSize.y = minHeight
     if (title) this.title = title
-    this.withHeader = !!withHeader
   }
 
   get headerElement() {
@@ -116,9 +119,9 @@ class Window extends EventTarget {
           ? `<div class="header">
             <div class="header__title handler">
               <div class="header-title__icon">${this.icon ?? ""}</div>
-              <div class="header-title__name">${this.title}</div>
+              <div class="header-title__name">${this.title ?? ""}</div>
             </div>
-            <div class="header__button minify"></div>
+            ${!this.isModal ? `<div class="header__button minify"></div>` : ""}
             ${this.isResizable ? `<div class="header__button fullscreen"></div>` : ""}
             <div class="header__button close"></div>
           </div>`
