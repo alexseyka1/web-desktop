@@ -1,6 +1,6 @@
 /**
  * Function adds submenu to dropdown with event handlers
- * @typedef {{title: string, onClick: Function, children: MenuItem[]}} MenuItem
+ * @typedef {{title: string, icon: string, onClick: Function, children: MenuItem[], className: string}} MenuItem
  * @typedef {{element: HTMLElement, x: number, y: number}} DropdownMenuParams
  *
  * @param {MenuItem|MenuItem[]} item Menu item or array of items
@@ -8,7 +8,11 @@
  * @param {DropdownMenuParams|null} params
  */
 export const addDropdownSubMenu = (item, appendTo, params = null) => {
-  if (appendTo.querySelector(".dropdown-menu")) return
+  const _existingMenu = appendTo.querySelector(".dropdown-menu")
+  if (_existingMenu) {
+    if (appendTo === document.body) _existingMenu.remove()
+    else return
+  }
 
   const _menuElem = createDropdownMenu(item)
   let verticalOffset = 0,

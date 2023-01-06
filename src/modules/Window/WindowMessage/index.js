@@ -1,4 +1,5 @@
 import Window, { WindowEvents } from ".."
+import systemBus, { SYSTEM_BUS_COMMANDS } from "../../SystemBus"
 import "./styles.scss"
 
 export const WINDOW_MESSAGE_TYPES = {
@@ -6,6 +7,7 @@ export const WINDOW_MESSAGE_TYPES = {
   INFO: "info",
   WARNING: "warning",
   ERROR: "error",
+  QUESTION: "question",
 }
 
 export const createWindowMessages = (_window) => {
@@ -19,11 +21,7 @@ export const createWindowMessages = (_window) => {
      */
     showMessage(title, message, type = null, actions = null) {
       const _messageWindow = new WindowMessage({ type, title, message, actions })
-      _window.dispatchEvent(
-        new CustomEvent(WindowEvents.ATTACH_SUB_WINDOW, {
-          detail: _messageWindow,
-        })
-      )
+      systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, _messageWindow)
       return _messageWindow
     }
 
@@ -62,6 +60,26 @@ export const createWindowMessages = (_window) => {
     showMessageError(title, message) {
       return this.showMessage(title, message, WINDOW_MESSAGE_TYPES.ERROR)
     }
+
+    /**
+     * @param {string} title
+     * @param {string} message
+     * @param {Function} onConfirm
+     * @param {Function} onCancel
+     * @returns {WindowMessage}
+     */
+    showMessageQuestion(title, message, onConfirm = () => {}, onCancel = () => {}) {
+      return this.showMessage(title, message, WINDOW_MESSAGE_TYPES.QUESTION, [
+        {
+          title: "No",
+          onClick: onCancel,
+        },
+        {
+          title: "Yes",
+          onClick: onConfirm,
+        },
+      ])
+    }
   })()
 }
 
@@ -97,6 +115,8 @@ class WindowMessage extends Window {
           this.icon = "⚠️"
         } else if (messageType === WINDOW_MESSAGE_TYPES.ERROR) {
           this.icon = "🚫"
+        } else if (messageType === WINDOW_MESSAGE_TYPES.QUESTION) {
+          this.icon = "❓"
         }
       }
     }
@@ -128,7 +148,11 @@ class WindowMessage extends Window {
         if (!title) return
         const button = document.createElement("button")
         button.innerHTML = title
-        button.addEventListener("click", onClick)
+        button.addEventListener("click", (e) => {
+          if (onClick(new CustomEvent(e.type, { detail: this })) !== false) {
+            this.dispatchEvent(new Event(WindowEvents.CLOSE))
+          }
+        })
 
         actionsElement.append(button)
       })

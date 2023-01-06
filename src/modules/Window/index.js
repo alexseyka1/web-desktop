@@ -15,7 +15,6 @@ export const WindowEvents = {
   HANDLE_STARTED: "window-handle-started",
   HANDLE_STOPPED: "window-handle-stopped",
   MOVED: "window-moved",
-  ATTACH_SUB_WINDOW: "window-attach-sub-window",
 }
 
 const WINDOW_DEFAULTS = {
@@ -28,6 +27,7 @@ const WINDOW_DEFAULTS = {
 class Window extends EventTarget {
   BORDER_SIZE = 5
 
+  params = {}
   /** @type {HTMLElement} */
   domElement
   /** @type {Vector} */
@@ -41,8 +41,9 @@ class Window extends EventTarget {
   isMaximized = false
   withHeader = true
 
-  constructor(params) {
+  constructor(params = {}) {
     super()
+    this.params = params
     const self = this
     const { x, y, width, height, minWidth, minHeight, title } = params || {}
     Object.keys(params).forEach((param) => {
@@ -548,7 +549,8 @@ class Window extends EventTarget {
     this.isResizable && this.#registerResizeHandle()
     this.withHeader && this.#initHeader()
     this.#registerWindowSystemEvents()
-    this.addEventListener(WindowEvents.CLOSE, () => {
+    this.addEventListener(WindowEvents.CLOSE, (e) => {
+      if (e.defaultPrevented) return
       this.domElement.remove()
       this.dispatchEvent(new Event(WindowEvents.CLOSED))
     })

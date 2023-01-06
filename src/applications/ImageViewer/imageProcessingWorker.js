@@ -1,10 +1,10 @@
-import fileSystem from "../FileExplorer/FileSystem"
+import systemBus, { SYSTEM_BUS_COMMANDS } from "../../modules/SystemBus"
 
 const commands = {
   "open-image": async (filePath) => {
     try {
-      const fileMeta = await fileSystem.getFile(filePath)
-      const fileContent = await fileSystem.getFileContent(fileMeta.fileId)
+      const { file: fileMeta } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_META, filePath)
+      const { content: fileContent } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_CONTENT, fileMeta.fileId)
       const _blob = new Blob([fileContent.arrayBuffer], { type: fileMeta.mimeType })
       postMessage(["set-parsed-image", URL.createObjectURL(_blob), fileMeta])
     } catch (e) {

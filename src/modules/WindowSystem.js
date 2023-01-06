@@ -1,3 +1,4 @@
+import systemBus, { SYSTEM_BUS_COMMANDS } from "./SystemBus"
 import Window, { WindowEvents } from "./Window"
 
 export const WindowSystemEvents = {
@@ -18,6 +19,7 @@ class WindowSystem extends EventTarget {
       e.preventDefault()
       e.stopPropagation()
     })
+    this.#attachSystemBus()
   }
 
   get isAlreadyRan() {
@@ -106,138 +108,6 @@ class WindowSystem extends EventTarget {
     }
   }
 
-  #registerWindowResizeHelper(window) {
-    let leftOverlayTimer, rightOverlayTimer, topOverlayTimer, bottomOverlayTimer, overlayElem, currentPosition
-    let rootBoundings = this.root.getBoundingClientRect()
-    const clearTimers = () => {
-      if (leftOverlayTimer) clearTimeout(leftOverlayTimer)
-      if (rightOverlayTimer) clearTimeout(rightOverlayTimer)
-      if (topOverlayTimer) clearTimeout(topOverlayTimer)
-      if (bottomOverlayTimer) clearTimeout(bottomOverlayTimer)
-    }
-    const removeHelperOverlay = () => {
-      if (overlayElem) overlayElem.style.display = "none"
-    }
-    const onMoveHandler = (e) => {
-      const { x, y, prevX, prevY } = e.detail
-
-      const movedToLeft = x < prevX,
-        movedToRight = x > prevX,
-        movedToTop = y < prevY,
-        movedToBottom = y > prevY
-
-      const overlayClassName = "window-helper-overlay"
-      const createHelperOverlay = () => {
-        const { x, y, width, height } = window.domElement.getBoundingClientRect()
-        overlayElem = this.root.querySelector(`.${overlayClassName}`) || document.createElement("div")
-        overlayElem.className = overlayClassName
-        overlayElem.style.left = `${x}px`
-        overlayElem.style.top = `${y}px`
-        overlayElem.style.width = `${width}px`
-        overlayElem.style.height = `${height}px`
-        overlayElem.style.display = "block"
-        this.root.append(overlayElem)
-      }
-
-      clearTimers()
-      if (movedToLeft && x === rootBoundings.x) {
-        /**
-         * Left side
-         */
-        if (overlayElem && overlayElem.getBoundingClientRect().x !== x) removeHelperOverlay()
-
-        leftOverlayTimer = setTimeout(() => {
-          createHelperOverlay()
-          setTimeout(() => {
-            overlayElem.style.top = 0
-            overlayElem.style.height = "100%"
-            overlayElem.style.width = "50%"
-            currentPosition = "left"
-          }, 10)
-        }, 250)
-      } else if (movedToRight && x + window.size.x === rootBoundings.x + rootBoundings.width) {
-        /**
-         * Right side
-         */
-        if (overlayElem && overlayElem.getBoundingClientRect().x !== x) removeHelperOverlay()
-
-        rightOverlayTimer = setTimeout(() => {
-          createHelperOverlay()
-          setTimeout(() => {
-            overlayElem.style.top = 0
-            overlayElem.style.left = Math.floor(rootBoundings.width / 2)
-            overlayElem.style.height = "100%"
-            overlayElem.style.width = Math.floor(rootBoundings.height / 2)
-            currentPosition = "right"
-          }, 10)
-        }, 250)
-      } else if (movedToTop && y === rootBoundings.y) {
-        /**
-         * Top side
-         */
-        if (overlayElem && overlayElem.getBoundingClientRect().y !== y) removeHelperOverlay()
-
-        leftOverlayTimer = setTimeout(() => {
-          createHelperOverlay()
-          setTimeout(() => {
-            overlayElem.style.top = 0
-            overlayElem.style.left = 0
-            overlayElem.style.height = "50%"
-            overlayElem.style.width = "100%"
-            currentPosition = "top"
-          }, 10)
-        }, 250)
-      } else if (movedToBottom && y + window.size.y === rootBoundings.y + rootBoundings.height) {
-        /**
-         * Bottom side
-         */
-        if (overlayElem && overlayElem.getBoundingClientRect().y !== y) removeHelperOverlay()
-
-        leftOverlayTimer = setTimeout(() => {
-          createHelperOverlay()
-          setTimeout(() => {
-            overlayElem.style.top = "50%"
-            overlayElem.style.left = 0
-            overlayElem.style.height = "50%"
-            overlayElem.style.width = "100%"
-            currentPosition = "bottom"
-          }, 10)
-        }, 250)
-      } else {
-        removeHelperOverlay()
-      }
-    }
-
-    window.addEventListener(WindowEvents.HANDLE_STARTED, () => {
-      rootBoundings = this.root.getBoundingClientRect()
-      window.addEventListener(WindowEvents.MOVED, onMoveHandler)
-
-      const stoppedHandler = () => {
-        window.removeEventListener(WindowEvents.MOVED, onMoveHandler)
-
-        if (overlayElem && currentPosition) {
-          if (currentPosition === "left")
-            [window.position.x, window.position.y, window.size.x, window.size.y] = [0, 0, rootBoundings.width / 2, rootBoundings.height]
-          else if (currentPosition === "right")
-            [window.position.x, window.position.y, window.size.x, window.size.y] = [rootBoundings.width / 2, 0, rootBoundings.width / 2, rootBoundings.height]
-          else if (currentPosition === "top")
-            [window.position.x, window.position.y, window.size.x, window.size.y] = [0, 0, rootBoundings.width, rootBoundings.height / 2]
-          else if (currentPosition === "bottom")
-            [window.position.x, window.position.y, window.size.x, window.size.y] = [0, rootBoundings.height / 2, rootBoundings.width, rootBoundings.height / 2]
-        }
-        clearTimers()
-        removeHelperOverlay()
-        window.removeEventListener(WindowEvents.HANDLE_STOPPED, stoppedHandler)
-      }
-      window.addEventListener(WindowEvents.HANDLE_STOPPED, stoppedHandler)
-    })
-  }
-
-  #onAttachSubWindow(event) {
-    if (!event?.detail || !(event?.detail instanceof Window)) return
-    this.attach(event.detail)
-  }
-
   /**
    * @param {Window} window
    */
@@ -253,8 +123,6 @@ class WindowSystem extends EventTarget {
      * Scale window to previous size
      */
     window.addEventListener(WindowEvents.SCREEN_WINDOWED, windowScreenSizeEvents[WindowEvents.SCREEN_WINDOWED].bind(this))
-
-    window.addEventListener(WindowEvents.ATTACH_SUB_WINDOW, (e) => this.#onAttachSubWindow(e))
   }
 
   #appendAndRunWindow(_window) {
@@ -262,6 +130,13 @@ class WindowSystem extends EventTarget {
     _window.init()
     _window.run()
     this.dispatchEvent(new Event(WindowSystemEvents.STACK_CHANGED))
+  }
+
+  #attachSystemBus() {
+    systemBus.addMiddleware(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, (request, response, next) => {
+      this.attach(request)
+      next()
+    })
   }
 
   run() {

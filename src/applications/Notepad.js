@@ -1,3 +1,4 @@
+import systemBus, { SYSTEM_BUS_COMMANDS } from "../modules/SystemBus"
 import Vector from "../modules/Vector"
 import Window, { WindowEvents } from "../modules/Window"
 
@@ -39,7 +40,7 @@ class NotePad extends Window {
         })
       }
     })(params)
-    this.dispatchEvent(new CustomEvent(WindowEvents.ATTACH_SUB_WINDOW, { detail: modalWindow }))
+    systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, modalWindow)
   }
 
   getMenu() {

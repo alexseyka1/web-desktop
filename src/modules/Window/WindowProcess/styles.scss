@@ -1,0 +1,107 @@
+.window-process {
+  height: auto !important;
+  max-height: 50%;
+
+  & .content {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  &__item {
+    padding: 0.5rem;
+    font-size: 0.875rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.25rem;
+    box-shadow: 0 -1px 0 0 #e0e0e0;
+
+    &:nth-child(2n) {
+      background-color: #f4f4f4;
+    }
+
+    &.complete {
+      .window-process-item {
+        &__percent {
+          font-size: 0;
+        }
+
+        &__progress-line {
+          animation: none;
+          background: #8bc34a;
+        }
+      }
+    }
+  }
+}
+
+@keyframes progress-bar-freezed {
+  to {
+    background-position: 100% 100%;
+  }
+}
+@keyframes progress-bar-running {
+  from {
+    background-position: 100% 100%;
+  }
+}
+
+.window-process-item {
+  &__top-bar {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  &__title{
+    line-height: 1rem;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  &__percent {
+    transition: all 0.25s ease-in-out;
+  }
+
+  &__progress-bar{
+    width: 100%;
+    height: 0.5rem;
+    background-color: #e0e0e0;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+    border-radius: .25rem;
+
+    &.active {
+      background-image: repeating-linear-gradient(
+        -45deg,
+        #2196f377,
+        #2196f377 10px,
+        #2196f333 10px,
+        #2196f333 20px
+      );
+      background-size: 200% 200%;
+      animation: progress-bar-freezed 5s infinite linear;
+    }
+  }
+
+  &__progress-line{
+    height: 100%;
+    background-color: #2196f3;
+
+    background: repeating-linear-gradient(
+      -45deg,
+      #2196f3,
+      #2196f3 10px,
+      #2196f3cc 10px,
+      #2196f3cc 20px
+    );
+    background-size: 200% 200%;
+    animation: progress-bar-running 10s infinite linear;
+    transition: all 0.5s ease-in-out;
+  }
+}

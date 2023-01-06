@@ -1,3 +1,4 @@
+import systemBus, { SYSTEM_BUS_COMMANDS, SYSTEM_BUS_EVENTS } from "../SystemBus"
 import StorageQueryBuilder from "./Storage"
 import StorageIterator from "./StorageIterator"
 
@@ -6,10 +7,6 @@ import StorageIterator from "./StorageIterator"
  * / --> root                             /
  *     /home --> user home folder         /home
  *     |   /images                        /home/images
- *     |   |   /wallpapers                /home/images/wallpapers
- *     |   |   |   /wallpaper-1.jpg       /home/images/wallpapers/wallpaper-1.jpg
- *     |   |   |   /wallpaper-2.jpg       /home/images/wallpapers/wallpaper-2.jpg
- *     |   |   |   /wallpaper-3.jpg       /home/images/wallpapers/wallpaper-3.jpg
  *     |   /videos                        /home/videos
  *     |   |   /interesting-moovie.mp4    /home/videos/interesting-moovie.mp4
  *     |   |   /scary-moovie.avi          /home/videos/scary-moovie.avi
@@ -28,31 +25,13 @@ import StorageIterator from "./StorageIterator"
  *     /system                            /system
  */
 
-export const FILE_SYSTEM_EVENTS = {
-  CREATE: "file-system-create",
-  CREATED: "file-system-created",
-  DIRECTORY_CHANGED: "file-system-directory-changed",
-}
-
 const DATABASE_NAME = "file-system"
 const FILE_STORAGE_NAME = "file"
 const META_STORAGE_NAME = "file_meta"
 
 const BASE_FILE_STRUCTURE = {
   home: {
-    images: {
-      wallpapers: {
-        "wallpaper-1.jpg": {
-          mimeType: "image/jpg",
-        },
-        "wallpaper-2.png": {
-          mimeType: "image/png",
-        },
-        "wallpaper-3.gif": {
-          mimeType: "image/gif",
-        },
-      },
-    },
+    images: {},
     videos: {
       "interesting-moovie.mp4": {
         mimeType: "video/mp4",
@@ -76,26 +55,7 @@ const BASE_FILE_STRUCTURE = {
       },
     },
   },
-  applications: {
-    "deus-ex.app": {
-      mimeType: "application",
-    },
-    "diablo-2.app": {
-      mimeType: "application",
-    },
-    "counter-strike.app": {
-      mimeType: "application",
-    },
-    "microsoft-word.app": {
-      mimeType: "application",
-    },
-    "microsoft-excel.app": {
-      mimeType: "application",
-    },
-    "notepad.app": {
-      mimeType: "application",
-    },
-  },
+  applications: {},
   system: {},
 }
 
@@ -225,16 +185,7 @@ export class FileMeta {
   }
 }
 
-class FileSystem extends EventTarget {
-  constructor() {
-    super()
-
-    this.addEventListener(FILE_SYSTEM_EVENTS.CREATE, async () => {
-      await createInitialFileStructure(BASE_FILE_STRUCTURE)
-      this.dispatchEvent(new Event(FILE_SYSTEM_EVENTS.CREATED))
-    })
-  }
-
+class FileSystem {
   getIsCreated = async () => (await indexedDB.databases()).length
 
   /**
@@ -250,8 +201,9 @@ class FileSystem extends EventTarget {
 
   /**
    * @param {string} path
+   * @returns {FileMeta}
    */
-  async getFile(path) {
+  async getFileMeta(path) {
     const pathElements = path.split("/")
     const fileName = pathElements.pop()
     const directoryName = pathElements.join("/") || "/"
@@ -266,18 +218,42 @@ class FileSystem extends EventTarget {
   }
 
   /**
-   * @param {object} file
-   * @param {string} path
+   * @callback UploadFileListOnProgress
+   * @param {FileSystemFileEntry} file
+   * @param {ProgressEvent} onProgress
    */
-  async uploadFile(file, path) {
+  /**
+   * @param {FileSystemFileEntry[]} files
+   * @param {string} path
+   * @param {UploadFileListOnProgress} onProgress
+   */
+  async uploadFilesList(files, path, onProgress = () => {}) {
+    systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILES_STARTED)
+    for (let file of files) await this.uploadFile(file, path, (e) => onProgress(file, e))
+    systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILES_FINISHED)
+  }
+
+  /**
+   * @callback UploadFileOnProgress
+   * @param {ProgressEvent} e
+   */
+  /**
+   * @param {FileSystemFileEntry} file
+   * @param {string} path
+   * @param {UploadFileOnProgress} onProgress
+   */
+  async uploadFile(file, path, onProgress = () => {}) {
+    /**
+     * @todo delete this analog of `sleep` function
+     */
+    await new Promise((resolve) => setTimeout(() => resolve(), 500))
+
     if (!file?.name) {
       throw new Error("Failed to upload file. File is broken or has not filename.")
     }
 
     const reader = new FileReader()
-    // reader.addEventListener("progress", (e) => {
-    //   console.log(e)
-    // })
+    reader.addEventListener("progress", (e) => onProgress(e))
 
     const arrayBuffer = await new Promise((resolve, reject) => {
       reader.addEventListener("load", (event) => resolve(event.target.result))
@@ -305,7 +281,7 @@ class FileSystem extends EventTarget {
           metaStore.add(metaInfo)
         })
 
-      this.dispatchEvent(new CustomEvent(FILE_SYSTEM_EVENTS.DIRECTORY_CHANGED, { detail: path }))
+      systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DIRECTORY_CHANGED, path)
     }
   }
 
@@ -325,8 +301,101 @@ class FileSystem extends EventTarget {
         })
       })
   }
+
+  /**
+   * @callback DeleteFileListOnProgress
+   * @param {FileMeta} file
+   * @param {ProgressEvent} onProgress
+   */
+  /**
+   * @param {FileMeta[]} files
+   * @param {DeleteFileListOnProgress} onProgress
+   */
+  async deleteFilesList(files, onProgress = () => {}) {
+    systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DELETE_FILES_STARTED)
+
+    const total = files.length
+    let deletedCount = 0
+    for (let file of files) {
+      await this.deleteFile(file)
+      onProgress(file, new ProgressEvent("file-delete", { total, loaded: ++deletedCount }))
+    }
+    systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DELETE_FILES_FINISHED)
+  }
+
+  /**
+   * @param {FileMeta} file
+   */
+  async deleteFile(file) {
+    /**
+     * @todo delete this analog of `sleep` function
+     */
+    await new Promise((resolve) => setTimeout(() => resolve(), 3000))
+
+    if (!file?.fileId) {
+      throw new Error("Failed to delete file. File is broken or has not filename.")
+    }
+
+    await getQueryBuilder()
+      .setStoreNames([FILE_STORAGE_NAME, META_STORAGE_NAME])
+      .doInTransaction("readwrite", async (transaction) => {
+        const filesStore = transaction.objectStore(FILE_STORAGE_NAME)
+        const metaStore = transaction.objectStore(META_STORAGE_NAME)
+
+        await new Promise((resolve, reject) => {
+          const request = filesStore.delete(file.fileId)
+          request.onsuccess = () => resolve(request.result)
+          request.onerror = () => reject(request.error)
+        })
+        await new Promise((resolve, reject) => {
+          const request = metaStore.delete(file.fileId)
+          request.onsuccess = () => resolve(request.result)
+          request.onerror = () => reject(request.error)
+        })
+      })
+
+    systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DIRECTORY_CHANGED, file.path)
+  }
 }
 
 const fileSystem = new FileSystem()
+
+/**
+ * Registering system bus event handlers
+ */
+systemBus
+  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_META, async (filePath, response, next) => {
+    response.file = await fileSystem.getFileMeta(filePath)
+    next()
+  })
+  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_CONTENT, async (fileId, response, next) => {
+    response.content = await fileSystem.getFileContent(fileId)
+    next()
+  })
+  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.CREATE_FILE_STRUCTURE, async (_, response, next) => {
+    await createInitialFileStructure(BASE_FILE_STRUCTURE)
+    response.isCompleted = true
+    next()
+  })
+  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.IS_STRUCTURE_EXISTS, async (_, response, next) => {
+    response.isCreated = await fileSystem.getIsCreated()
+    next()
+  })
+  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.GET_FILES_ITERATOR, (dirPath, response, next) => {
+    response.iterator = fileSystem.getFilesInDirectory(dirPath)
+    next()
+  })
+  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.UPLOAD_FILES_LIST, async ({ files, path }, _, next) => {
+    await fileSystem.uploadFilesList(files, path, (_file, e) => {
+      systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILE_PROGRESS, { _file, e })
+    })
+    next()
+  })
+  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.DELETE_FILES_LIST, async (files, _, next) => {
+    await fileSystem.deleteFilesList(files, (_file, e) => {
+      systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DELETE_FILE_PROGRESS, { _file, e })
+    })
+    next()
+  })
 
 export default fileSystem
