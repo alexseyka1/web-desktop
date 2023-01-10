@@ -20,8 +20,8 @@ class ImageViewer extends Window {
     this.windowMessages = createWindowMessages(this)
     this.filePath = props?.filePath
 
-    this.contentElement.classList.add("image-viewer")
-    this.contentElement.innerHTML = `
+    this.domElement.classList.add("image-viewer")
+    this.domElement.innerHTML = `
       <div class="image-viewer__loader"></div>
       <div class="image-viewer__image"></div>
     `
@@ -31,7 +31,7 @@ class ImageViewer extends Window {
   }
 
   get imageContentElement() {
-    return this.contentElement.querySelector(".image-viewer__image")
+    return this.domElement.querySelector(".image-viewer__image")
   }
 
   #resetTransformMatrix() {
@@ -93,7 +93,7 @@ class ImageViewer extends Window {
     let el = this.imageContentElement
     el.style.transformOrigin = "0 0"
 
-    gesturesHandler.handleGestures(this.contentElement, {
+    gesturesHandler.handleGestures(this.domElement, {
       onGestureStart(gesture) {
         el.style.transform = ""
         origin = gesturesHandler.getOrigin(el, gesture)

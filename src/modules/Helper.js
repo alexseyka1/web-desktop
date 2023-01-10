@@ -41,14 +41,13 @@ const Helper = {
       topPosition = window.position.y,
       bottomPosition = window.position.y + window.size.y
 
-    const cursorInsideWindow =
-      between(x, [leftPosition - borderSize, rightPosition + borderSize]) && between(y, [topPosition - borderSize, bottomPosition + borderSize])
+    const cursorInsideWindow = between(x, [leftPosition, rightPosition]) && between(y, [topPosition, bottomPosition])
     if (!cursorInsideWindow) return null
 
-    const cursorOnLeft = between(x, [leftPosition - borderSize, leftPosition]),
-      cursorOnRight = between(x, [rightPosition, rightPosition + borderSize]),
-      cursorOnTop = between(y, [topPosition - borderSize, topPosition]),
-      cursorOnBottom = between(y, [bottomPosition, bottomPosition + borderSize])
+    const cursorOnLeft = between(x, [leftPosition + 1, leftPosition + borderSize]),
+      cursorOnRight = between(x, [rightPosition - borderSize, rightPosition - 1]),
+      cursorOnTop = between(y, [topPosition + 1, topPosition + borderSize]),
+      cursorOnBottom = between(y, [bottomPosition - borderSize, bottomPosition - 1])
 
     if (cursorOnLeft && cursorOnTop) return 1
     if (cursorOnRight && cursorOnTop) return 3

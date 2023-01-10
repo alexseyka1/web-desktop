@@ -8,8 +8,8 @@ class RandomColor extends Window {
     const setRandomColor = () => {
       const randomHex = () => Math.floor(Math.random() * 255)
       const color = `rgb(${randomHex()}, ${randomHex()}, ${randomHex()})`
-      this.contentElement.style.transition = "all 0.5s linear"
-      this.contentElement.style.backgroundColor = color
+      this.domElement.style.transition = "all 0.5s linear"
+      this.domElement.style.backgroundColor = color
       this.title = `Random color ${color}`
       this.icon = "🌈"
     }

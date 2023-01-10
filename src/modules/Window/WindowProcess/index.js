@@ -83,7 +83,7 @@ class WindowProcess extends WindowMessage {
    * @returns {HTMLElement[]}
    */
   get itemElements() {
-    return this.contentElement.querySelectorAll(".window-process__item")
+    return this.domElement.querySelectorAll(".window-process__item")
   }
 
   /**
@@ -104,7 +104,7 @@ class WindowProcess extends WindowMessage {
           <div class="window-process-item__progress-line" style="width: ${_percent}%"></div>
         </div>
       `
-    this.contentElement.append(elem)
+    this.domElement.append(elem)
 
     setTimeout(() => {
       const style = window.getComputedStyle(elem, null)
@@ -114,7 +114,7 @@ class WindowProcess extends WindowMessage {
 
   #render() {
     if (!this.#processes) return
-    this.contentElement.innerHTML = ""
+    this.domElement.innerHTML = ""
 
     this.#processes.forEach((item) => this.#createNewProcess(item))
     this.#updateTotalPercentage()

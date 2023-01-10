@@ -1,11 +1,9 @@
-import systemBus, { SYSTEM_BUS_COMMANDS } from "./SystemBus"
-import Window, { WindowEvents } from "./Window"
+import systemBus, { SYSTEM_BUS_COMMANDS, SYSTEM_BUS_EVENTS } from "../SystemBus"
+import Window, { WindowEvents } from "../Window"
+import WindowWrapper, { createWindowWrapper } from "./WindowWrapper"
+import "./styles.scss"
 
-export const WindowSystemEvents = {
-  STACK_CHANGED: "window-system-stack-changed",
-}
-
-class WindowSystem extends EventTarget {
+class WindowSystem {
   windows = []
   /** @type {HTMLElement} */
   root
@@ -13,7 +11,6 @@ class WindowSystem extends EventTarget {
   windowInFocus
 
   constructor(containerElement) {
-    super()
     this.root = containerElement
     this.root.addEventListener("contextmenu", (e) => {
       e.preventDefault()
@@ -46,14 +43,15 @@ class WindowSystem extends EventTarget {
    * @param {Window|Window[]} item
    */
   attach(item) {
-    const _attachWindow = (window) => {
-      this.windows.push(window)
-      this.#attachWindowEvents(window)
+    const _attachWindow = (_window) => {
+      const wrapper = createWindowWrapper(_window)
+      this.windows.push(wrapper)
+      this.#attachWindowEvents(wrapper)
 
-      this.focusOnWindow(window)
-      window.domElement.addEventListener("mousedown", () => this.focusOnWindow(window))
+      this.focusOnWindow(wrapper)
+      wrapper.domElement.addEventListener("mousedown", () => this.focusOnWindow(wrapper))
       if (this.isAlreadyRan) {
-        this.#appendAndRunWindow(window)
+        this.#appendAndRunWindow(wrapper)
       }
     }
 
@@ -63,7 +61,7 @@ class WindowSystem extends EventTarget {
 
   #onWindowClosed(window) {
     this.windows = this.windows.filter((item) => item !== window)
-    this.dispatchEvent(new Event(WindowSystemEvents.STACK_CHANGED))
+    systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.WINDOW_SYSTEM.STACK_CHANGED)
   }
 
   #getWindowSizeEvents(window) {
@@ -114,27 +112,30 @@ class WindowSystem extends EventTarget {
   #attachWindowEvents(window) {
     window.addEventListener(WindowEvents.CLOSED, () => this.#onWindowClosed(window))
 
-    const windowScreenSizeEvents = this.#getWindowSizeEvents(window)
-    /**
-     * Scale Window to fullscreen
-     */
-    window.addEventListener(WindowEvents.SCREEN_FULL, windowScreenSizeEvents[WindowEvents.SCREEN_FULL].bind(this))
-    /**
-     * Scale window to previous size
-     */
-    window.addEventListener(WindowEvents.SCREEN_WINDOWED, windowScreenSizeEvents[WindowEvents.SCREEN_WINDOWED].bind(this))
+    // const windowScreenSizeEvents = this.#getWindowSizeEvents(window)
+    // /**
+    //  * Scale Window to fullscreen
+    //  */
+    // window.addEventListener(WindowEvents.SCREEN_FULL, windowScreenSizeEvents[WindowEvents.SCREEN_FULL].bind(this))
+    // /**
+    //  * Scale window to previous size
+    //  */
+    // window.addEventListener(WindowEvents.SCREEN_WINDOWED, windowScreenSizeEvents[WindowEvents.SCREEN_WINDOWED].bind(this))
   }
 
-  #appendAndRunWindow(_window) {
-    this.root.append(_window.domElement)
-    _window.init()
-    _window.run()
-    this.dispatchEvent(new Event(WindowSystemEvents.STACK_CHANGED))
+  /**
+   * @param {WindowWrapper} _windowWrapper
+   */
+  #appendAndRunWindow(_windowWrapper) {
+    this.root.append(_windowWrapper.domElement)
+    _windowWrapper.init()
+    _windowWrapper.run()
+    systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.WINDOW_SYSTEM.STACK_CHANGED)
   }
 
   #attachSystemBus() {
-    systemBus.addMiddleware(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, (request, response, next) => {
-      this.attach(request)
+    systemBus.addMiddleware(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, (_window, _, next) => {
+      this.attach(_window)
       next()
     })
   }

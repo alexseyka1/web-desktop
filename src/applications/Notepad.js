@@ -1,6 +1,6 @@
 import systemBus, { SYSTEM_BUS_COMMANDS } from "../modules/SystemBus"
 import Vector from "../modules/Vector"
-import Window, { WindowEvents } from "../modules/Window"
+import Window, { GET_MENU_METHOD, WindowEvents } from "../modules/Window"
 
 class NotePad extends Window {
   constructor(params) {
@@ -8,7 +8,6 @@ class NotePad extends Window {
 
     this.title = "Notepad"
     this.icon = "📘"
-    this.registerMenu(this.getMenu())
   }
 
   showAbout() {
@@ -27,7 +26,7 @@ class NotePad extends Window {
       }
 
       run() {
-        this.contentElement.innerHTML = `
+        this.domElement.innerHTML = `
           <div style="display: flex; justify-content: center; align-items: center; flex-direction: column; height: 100%">
             <h1 style="margin: 0; font-size: 16pt">📘 Notepad</h1>
             <div style="margin: 0; font-size: 13px; color: #555">Version 1.0.0</div>
@@ -43,7 +42,7 @@ class NotePad extends Window {
     systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, modalWindow)
   }
 
-  getMenu() {
+  [GET_MENU_METHOD]() {
     return [
       {
         title: "File",
@@ -132,9 +131,9 @@ class NotePad extends Window {
         This is a sample test inside Notepad application.
       </div>
     `
-    this.contentElement.append(template.content)
+    this.domElement.append(template.content)
 
-    this.contentElement.addEventListener("keydown", (e) => {
+    this.domElement.addEventListener("keydown", (e) => {
       if (e.metaKey && e.key === "s") {
         e.preventDefault()
       }

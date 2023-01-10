@@ -4,11 +4,13 @@ import "./styles/dropdown-menu.scss"
 import Desktop from "./modules/desktop"
 import BottomBar from "./modules/desktop/BottomBar"
 import FileExplorer from "./applications/FileExplorer"
-import fileSystem, { FileMeta } from "./modules/FileSystem"
-import systemBus, { SYSTEM_BUS_COMMANDS } from "./modules/SystemBus"
+import { FileMeta } from "./modules/FileSystem"
+import systemBus, { SYSTEM_BUS_COMMANDS, SYSTEM_BUS_EVENTS } from "./modules/SystemBus"
 import ImageViewer from "./applications/ImageViewer"
 import NotePad from "./applications/Notepad"
 import WindowMessage, { WINDOW_MESSAGE_TYPES } from "./modules/Window/WindowMessage"
+import RandomColor from "./applications/RandomColor"
+import Window from "./modules/Window"
 
 globalThis.__DEBUG__ = true
 
@@ -48,7 +50,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   windowSystem.run()
 
   requestAnimationFrame(() => {
-    systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, new FileExplorer({ x: 250, y: 200, width: 350, height: 350 }))
+    systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, new RandomColor({ x: 250, y: 200, width: 350, height: 350 }))
+    systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, new Window({ x: 150, y: 100, width: 200, height: 200, title: "Second window" }))
   })
 
   /**
@@ -62,6 +65,5 @@ document.addEventListener("DOMContentLoaded", async () => {
    */
   const bottomBar = new BottomBar(windowSystem)
   document.body.append(bottomBar.domElement)
-
-  windowSystem.addEventListener(WindowSystemEvents.STACK_CHANGED, () => bottomBar.render())
+  systemBus.addEventListener(SYSTEM_BUS_EVENTS.WINDOW_SYSTEM.STACK_CHANGED, () => bottomBar.render())
 })

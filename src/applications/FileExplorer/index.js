@@ -56,18 +56,15 @@ class FileExplorer extends Window {
   }
 
   get topButtonsElement() {
-    if (!this.contentElement) return
-    return this.contentElement.querySelector(".file-explorer-top-bar__buttons")
+    return this.domElement.querySelector(".file-explorer-top-bar__buttons")
   }
 
   get directoryContentElement() {
-    if (!this.contentElement) return
-    return this.contentElement.querySelector(".file-explorer__directory-content")
+    return this.domElement.querySelector(".file-explorer__directory-content")
   }
 
   get locationForm() {
-    if (!this.contentElement) return
-    return this.contentElement.querySelector(".file-explorer-top-bar__path")
+    return this.domElement.querySelector(".file-explorer-top-bar__path")
   }
 
   get locationStringElement() {
@@ -76,8 +73,7 @@ class FileExplorer extends Window {
   }
 
   get bottomBarElement() {
-    if (!this.contentElement) return
-    return this.contentElement.querySelector(".file-explorer__bottom-bar")
+    return this.domElement.querySelector(".file-explorer__bottom-bar")
   }
 
   #registerKeyboardEvents() {
@@ -102,8 +98,8 @@ class FileExplorer extends Window {
 
   async init() {
     super.init()
-    this.contentElement.classList.add("file-explorer")
-    this.contentElement.innerHTML = `
+    this.domElement.classList.add("file-explorer")
+    this.domElement.innerHTML = `
       <div class="file-explorer__top-bar">
         <div class="file-explorer-top-bar__buttons"></div>
         <form class="file-explorer-top-bar__path">
@@ -114,9 +110,9 @@ class FileExplorer extends Window {
       <div class="file-explorer__bottom-bar"></div>
     `
 
-    this.contentElement.addEventListener("mousedown", () => {
+    this.domElement.addEventListener("mousedown", () => {
       this.#selectedFiles.clear()
-      this.contentElement.querySelectorAll(".files-grid-item.active").forEach((elem) => elem.classList.remove("active"))
+      this.domElement.querySelectorAll(".files-grid-item.active").forEach((elem) => elem.classList.remove("active"))
       this.#renderBottomBar()
     })
 
@@ -536,7 +532,7 @@ class FileExplorer extends Window {
       dropZone.style.visibility = "hidden"
       isDragChecked = false
     })
-    this.contentElement.append(dropZone)
+    this.domElement.append(dropZone)
   }
 
   async run() {

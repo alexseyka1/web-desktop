@@ -121,7 +121,7 @@ class WindowMessage extends Window {
       }
     }
 
-    this.contentElement.innerHTML = `
+    this.domElement.innerHTML = `
       <div class="window-message__content">
         ${messageType ? `<div class="window-message__icon">${this?.icon || ""}</div>` : ""}
         <div class="window-message__message">

@@ -17,7 +17,6 @@ class BottomBar {
   constructor(windowSystem) {
     this.windowSystem = windowSystem
     this.#registerStartButton()
-    this.render()
   }
 
   get domElement() {

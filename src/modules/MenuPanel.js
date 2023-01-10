@@ -6,6 +6,7 @@
  * @param {MenuItem|MenuItem[]} item Menu item or array of items
  * @param {HTMLElement} appendTo HTML element for appending dropdown menu
  * @param {DropdownMenuParams|null} params
+ * @returns {HTMLElement} Menu element
  */
 export const addDropdownSubMenu = (item, appendTo, params = null) => {
   const _existingMenu = appendTo.querySelector(".dropdown-menu")
@@ -64,6 +65,8 @@ export const addDropdownSubMenu = (item, appendTo, params = null) => {
       }
     })
   })
+
+  return _menuElem
 }
 
 /**
@@ -148,7 +151,7 @@ const createDropdownMenu = (item) => {
 /**
  * @param {{title: string, icon: string, onClick: Function}[]} menu
  */
-const getRegisterMenuObject = (menuElement) => {
+export const getRegisterMenuObject = (menuElement) => {
   function registerMenu(menu) {
     for (let i = 0; i < menu.length; i++) {
       const panelMenuItem = menu[i]

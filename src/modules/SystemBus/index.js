@@ -27,6 +27,9 @@ export const SYSTEM_BUS_EVENTS = {
     DELETE_FILE_PROGRESS: "file-system:delete-file-progress",
     DELETE_FILES_FINISHED: "file-system:delete-files-finished",
   },
+  WINDOW_SYSTEM: {
+    STACK_CHANGED: "window-system:stack-changed",
+  },
 }
 
 /**
