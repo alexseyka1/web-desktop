@@ -1,6 +1,6 @@
 import Window from "../Window"
 import RandomColor from "../../applications/RandomColor"
-import NotePad from "../../applications/Notepad"
+import Notepad from "../../applications/Notepad"
 import WindowSystem from "../WindowSystem"
 import "../../styles/desktop.scss"
 import "../../styles/files-grid.scss"
@@ -10,7 +10,7 @@ const APPLICATIONS = [
     icon: "📘",
     title: "Notepad",
     run() {
-      return new NotePad({ x: 250, y: 200, width: 350, height: 350 })
+      return new Notepad({ x: 250, y: 200, width: 350, height: 350 })
     },
   },
   {

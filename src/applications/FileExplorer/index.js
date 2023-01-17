@@ -1,6 +1,6 @@
 import Window, { WindowEvents } from "../../modules/Window"
 import { createWindowMessages } from "../../modules/Window/WindowMessage"
-import fileSystem, { FileMeta } from "../../modules/FileSystem"
+import { FileMeta } from "../../modules/FileSystem"
 import LocationStack from "./LocationStack"
 import { bytesToReadable } from "../../modules/FileSystem/Storage"
 import WindowProcess, { WindowProcessItem, WINDOW_PROCESS_EVENTS } from "../../modules/Window/WindowProcess"

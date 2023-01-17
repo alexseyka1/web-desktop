@@ -10,8 +10,11 @@ import WindowWrapper from "../WindowWrapper"
  * @returns {object}
  */
 const getWindowResizingMethods = (_window) => {
-  const resizingDurationMs = 200
-  let prevSize, prevPosition
+  const resizingDurationMs = 200,
+    parent = _window.domElement.parentNode,
+    boundings = parent.getBoundingClientRect()
+  let prevSize = new Vector(boundings.width / 2, boundings.height / 2),
+    prevPosition = new Vector(boundings.width / 4, boundings.height / 4)
 
   return {
     toggle() {
@@ -20,9 +23,7 @@ const getWindowResizingMethods = (_window) => {
     },
 
     full() {
-      const parent = _window.domElement.parentNode,
-        boundings = parent.getBoundingClientRect(),
-        screenWidth = boundings.width,
+      const screenWidth = boundings.width,
         screenHeight = boundings.height,
         maxWidth = Math.min(_window?.maxSize?.x || Infinity, screenWidth),
         maxHeight = Math.min(_window?.maxSize?.y || Infinity, screenHeight)

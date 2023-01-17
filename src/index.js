@@ -1,20 +1,21 @@
-import WindowSystem, { WindowSystemEvents } from "./modules/WindowSystem"
+import WindowSystem from "./modules/WindowSystem"
 import "./styles/document.scss"
 import "./styles/dropdown-menu.scss"
 import Desktop from "./modules/desktop"
 import BottomBar from "./modules/desktop/BottomBar"
-import FileExplorer from "./applications/FileExplorer"
 import { FileMeta } from "./modules/FileSystem"
 import systemBus, { SYSTEM_BUS_COMMANDS, SYSTEM_BUS_EVENTS } from "./modules/SystemBus"
 import ImageViewer from "./applications/ImageViewer"
-import NotePad from "./applications/Notepad"
+import Notepad from "./applications/Notepad"
 import WindowMessage, { WINDOW_MESSAGE_TYPES } from "./modules/Window/WindowMessage"
-import RandomColor from "./applications/RandomColor"
-import Window from "./modules/Window"
+import Terminal from "./applications/Terminal"
 
 globalThis.__DEBUG__ = true
 
 document.addEventListener("DOMContentLoaded", async () => {
+  /**
+   * INIT THE FILE SYSTEM
+   */
   const { isCreated } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.IS_STRUCTURE_EXISTS)
   if (!isCreated) {
     const { isCompleted } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.CREATE_FILE_STRUCTURE)
@@ -34,7 +35,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (file.mimeType.startsWith("image/")) {
       systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, new ImageViewer({ filePath: file.fullPath }))
     } else if (file.mimeType.startsWith("text/")) {
-      systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, new NotePad({ filePath: file.fullPath }))
+      systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, new Notepad({ filePath: file.fullPath }))
     } else {
       systemBus.execute(
         SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW,
@@ -44,15 +45,32 @@ document.addEventListener("DOMContentLoaded", async () => {
   })
 
   /**
+   * REGISTER SERVICE WORKER
+   */
+  // ;(async () => {
+  //   if ("serviceWorker" in navigator) {
+  //     try {
+  //       const registration = await navigator.serviceWorker.register("/serviceWorker.js", {
+  //         scope: "/",
+  //       })
+  //       if (registration.installing) {
+  //         console.log("Service worker installing")
+  //       } else if (registration.waiting) {
+  //         console.log("Service worker installed")
+  //       } else if (registration.active) {
+  //         console.log("Service worker active")
+  //       }
+  //     } catch (error) {
+  //       console.error(`Registration failed with ${error}`)
+  //     }
+  //   }
+  // })()
+
+  /**
    * WINDOW SYSTEM
    */
   const windowSystem = new WindowSystem(document.getElementById("windows"))
   windowSystem.run()
-
-  requestAnimationFrame(() => {
-    systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, new RandomColor({ x: 250, y: 200, width: 350, height: 350 }))
-    systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, new Window({ x: 150, y: 100, width: 200, height: 200, title: "Second window" }))
-  })
 
   /**
    * DESKTOP
@@ -66,4 +84,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   const bottomBar = new BottomBar(windowSystem)
   document.body.append(bottomBar.domElement)
   systemBus.addEventListener(SYSTEM_BUS_EVENTS.WINDOW_SYSTEM.STACK_CHANGED, () => bottomBar.render())
+
+  /**
+   * MOVE THIS FUNCIONALITY TO SEPARATE CLASS (SOME APPLICATION RUNNER)
+   */
+  const app = new Terminal()
+  app.main(["/applications2"])
 })

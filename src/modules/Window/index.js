@@ -14,8 +14,6 @@ export const WindowEvents = {
   MOVED: "window-moved",
 }
 
-export const GET_MENU_METHOD = Symbol.for("get-menu-method")
-
 class Window extends EventTarget {
   params = {}
   /** @type {HTMLElement} */
@@ -38,14 +36,7 @@ class Window extends EventTarget {
     })
   }
 
-  init() {
-    this.addEventListener(WindowEvents.CLOSE, (e) => {
-      if (e.defaultPrevented) return
-      this.domElement.remove()
-      this.dispatchEvent(new Event(WindowEvents.CLOSED))
-    })
-  }
-
+  init() {}
   run() {}
 }
 

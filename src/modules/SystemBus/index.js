@@ -14,6 +14,10 @@ export const SYSTEM_BUS_COMMANDS = {
     UPLOAD_FILES_LIST: "file-system:upload-files-list",
     DELETE_FILES_LIST: "file-system:delete-files-list",
   },
+  APP_RUNNER: {
+    RUN: "app-runner:run",
+    RUN_WITH_DEFINED_COMMANDS: "app-runner:run-with-defined-commands",
+  },
 }
 
 export const SYSTEM_BUS_EVENTS = {

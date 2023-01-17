@@ -25,6 +25,12 @@ export const withSharedValue = (object, name, initialValue = null, descriptor) =
   })
 }
 
+export const camelToKebabCase = (str) =>
+  str.split("").reduce((result, char, index) => {
+    if (!/[A-Z]/.test(char)) return result + char
+    return index === 0 ? char.toLowerCase() : `${result}-${char.toLowerCase()}`
+  }, [])
+
 const Helper = {
   isNumberBetween: (num, [from, to]) => num >= from && num <= to,
 

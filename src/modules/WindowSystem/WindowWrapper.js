@@ -1,7 +1,7 @@
 import { withSharedValue } from "../Helper"
 import { getRegisterMenuObject } from "../MenuPanel"
 import Vector from "../Vector"
-import Window, { GET_MENU_METHOD, WindowEvents } from "../Window"
+import Window, { WindowEvents } from "../Window"
 import getEventTargetMixin from "./mixins/getEventTargetMixin"
 import getPositioningMixin from "./mixins/getPositioningMixin"
 import getWindowHeaderMixin from "./mixins/getWindowHeaderMixin"
@@ -109,10 +109,6 @@ class WindowWrapper {
   }
 
   init() {
-    if (GET_MENU_METHOD in this._window) {
-      getRegisterMenuObject(this.menuElement)(this._window[GET_MENU_METHOD].call(this._window))
-    }
-
     this._registerWindowTitleChanging()
     Object.assign(this, getPositioningMixin())
     this.registerPosition()
@@ -128,6 +124,11 @@ class WindowWrapper {
     }
 
     this._window.init()
+  }
+
+  registerMenuPanel(menuItems) {
+    if (this.menuElement) this.menuElement.remove()
+    return getRegisterMenuObject(this.menuElement)(menuItems)
   }
 
   run() {

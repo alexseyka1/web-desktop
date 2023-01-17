@@ -1,4 +1,4 @@
-import NotePad from "../../applications/Notepad"
+import Notepad from "../../applications/Notepad"
 import RandomColor from "../../applications/RandomColor"
 import { addDropdownSubMenu } from "../MenuPanel"
 import Vector from "../Vector"
@@ -53,7 +53,7 @@ class BottomBar {
             icon: "📘",
             title: "Notepad",
             onClick: () => {
-              this.windowSystem.attach(new NotePad({ x: 250, y: 200, width: 350, height: 350 }))
+              this.windowSystem.attach(new Notepad({ x: 250, y: 200, width: 350, height: 350 }))
             },
           },
           {
