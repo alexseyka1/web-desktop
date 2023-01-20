@@ -31,8 +31,8 @@ class Application extends EventTarget {
    * @param {object} params
    * @returns {Promise<WindowWrapper>}
    */
-  async createWindow(params) {
-    const _window = new Window(params)
+  async createWindow(params, className = Window) {
+    const _window = new className(params)
 
     const { window: windowWrapper } = await systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, _window)
 

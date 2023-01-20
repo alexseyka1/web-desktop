@@ -1,7 +1,8 @@
 import Window, { WindowEvents } from "../../modules/Window"
-import { createWindowMessages } from "../../modules/Window/WindowMessage"
+import { WindowMessages } from "../../modules/Window/WindowMessage"
 import gesturesHandler from "../../modules/HandleGestures"
 import "./styles.scss"
+import imageProcessing from "../../modules/ImageProcessing"
 
 class ImageViewer extends Window {
   MIN_ZOOM = 0.1
@@ -17,7 +18,7 @@ class ImageViewer extends Window {
   constructor(props) {
     props = { width: 500, height: 400, ...props }
     super(props)
-    this.windowMessages = createWindowMessages(this)
+    this.windowMessages = new WindowMessages(this)
     this.filePath = props?.filePath
 
     this.domElement.classList.add("image-viewer")
@@ -26,8 +27,6 @@ class ImageViewer extends Window {
       <div class="image-viewer__image"></div>
     `
     this.icon = "🖼️"
-
-    this.#initWorker()
   }
 
   get imageContentElement() {
@@ -54,18 +53,6 @@ class ImageViewer extends Window {
     },
   }
 
-  #initWorker() {
-    this._processingWorker = new Worker(new URL("./imageProcessingWorker.js", import.meta.url))
-    this.addEventListener(WindowEvents.CLOSE, () => {
-      this._processingWorker.terminate()
-    })
-
-    this._processingWorker.onmessage = (e) => {
-      const [command, ...params] = e.data
-      if (command in this.#workerCommands) this.#workerCommands[command].apply(this, params)
-    }
-  }
-
   async run() {
     if (!this.filePath) {
       this.windowMessages.showMessageError("Failed to open file", "File is not specified")
@@ -78,7 +65,9 @@ class ImageViewer extends Window {
       filePath = filePath.pop()
     }
 
-    this._processingWorker.postMessage(["open-image", filePath])
+    imageProcessing.executeCommand("open-image", filePath).then(([url, fileMeta]) => {
+      this.#workerCommands["set-parsed-image"](url, fileMeta)
+    })
 
     if (!window.DOMMatrix) {
       if (window.WebKitCSSMatrix) {
@@ -100,7 +89,6 @@ class ImageViewer extends Window {
         gesturesHandler.applyMatrix(el, gesturesHandler.gestureToMatrix(gesture, origin).multiply(initialCtm))
       },
       onGesture(gesture) {
-        console.log(gesture, gesturesHandler.gestureToMatrix(gesture, origin))
         gesturesHandler.applyMatrix(el, gesturesHandler.gestureToMatrix(gesture, origin).multiply(initialCtm))
       },
       onGestureEnd(gesture) {

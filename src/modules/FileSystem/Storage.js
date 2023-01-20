@@ -17,6 +17,11 @@ export const bytesToReadable = (bytes, precision = 2) => {
   return bytes.toFixed(precision) + " " + units[unitIndex]
 }
 
+/**
+ * @returns {Promise<StorageEstimate>}
+ */
+export const getMemoryUsage = () => navigator.storage.estimate()
+
 class StorageQueryBuilder {
   #databaseName
   #version

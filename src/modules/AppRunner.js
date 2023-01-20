@@ -1,6 +1,6 @@
 import Application, { APPLICATION_EVENTS } from "./Application"
 import { camelToKebabCase } from "./Helper"
-import systemBus, { SYSTEM_BUS_COMMANDS } from "./SystemBus"
+import systemBus, { SYSTEM_BUS_COMMANDS, SYSTEM_BUS_EVENTS } from "./SystemBus"
 
 export const getDefinedApplications = () => {
   const requireAll = (r) =>
@@ -104,7 +104,7 @@ class AppRunner {
    * @param {Application|Function} application
    */
   run(application, inputString) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       /**
        * Get input arguments
        */
@@ -122,14 +122,21 @@ class AppRunner {
         args = _str.trim().split(" ")
       }
 
+      /**
+       * Run application
+       */
       if (application.toString().indexOf("_classCallCheck(") !== -1) {
         const dispatchExitCode = (_app, exitCode) => _app.dispatchEvent(new CustomEvent(APPLICATION_EVENTS.CLOSED, { detail: exitCode }))
 
         /** @type {Application} */
         const app = new application()
         app.addEventListener(APPLICATION_EVENTS.INPUT_REQUESTED, async () => {
-          const _inputString = await this.onInput()
-          app.dispatchEvent(new CustomEvent(APPLICATION_EVENTS.INPUT_STREAM, { detail: _inputString }))
+          try {
+            const _inputString = await this.onInput()
+            app.dispatchEvent(new CustomEvent(APPLICATION_EVENTS.INPUT_STREAM, { detail: _inputString }))
+          } catch (e) {
+            app.dispatchEvent(new Event(APPLICATION_EVENTS.CLOSED))
+          }
         })
         app.addEventListener(APPLICATION_EVENTS.OUTPUT_STREAM, (e) => {
           this.onOutput(e?.detail || "")
@@ -170,7 +177,7 @@ class AppRunner {
           resolve()
         }
       } else {
-        throw new Error("Specifie application is not a class extends Application and not a function.")
+        throw new Error("Specific application is not a class extends Application and not a function.")
       }
     })
   }
@@ -180,7 +187,6 @@ const appRunner = new AppRunner()
 
 const runWithDefinedCommands = async ([command, definedCommands], response, next) => {
   const [, appName, inputString] = command.match(/^([^\s]+)\s?(.*)?/)
-  console.log({ definedCommands })
 
   if (appName === "all-commands") {
     response.exitCode = await appRunner.run(async () => {

@@ -1,6 +1,33 @@
 import systemBus, { SYSTEM_BUS_COMMANDS, SYSTEM_BUS_EVENTS } from "../SystemBus"
-import StorageQueryBuilder from "./Storage"
+import StorageQueryBuilder, { bytesToReadable, getMemoryUsage } from "./Storage"
 import StorageIterator from "./StorageIterator"
+
+/**
+ * @param {string} currentPath
+ * @param {string} location
+ */
+export const resolvePath = (currentPath, location) => {
+  location = location.replace(/\s{2,}/, "/")
+  if (location.substring(0, 1) === "/") return location
+
+  let resultPath = currentPath
+  const _parts = location.split("/")
+
+  for (let _part of _parts) {
+    switch (_part) {
+      case "..":
+        resultPath = resultPath.replace(/^(.*)\/.*/, "$1")
+        break
+      case ".":
+        break
+      default:
+        resultPath += `/${_part}`
+        break
+    }
+  }
+
+  return resultPath
+}
 
 /**
  * Test file structure
@@ -159,6 +186,8 @@ export class FileMeta {
   /** @type {number} */
   size = null
   isDirectory = false
+  /** @type {ArrayBuffer} */
+  thumbnailBuffer = null
 
   constructor(filePath) {
     const parsed = filePath?.match(/^(?<directory>\/.+)?\/(?<filename>.+(\..+)?)$/)
@@ -204,17 +233,35 @@ class FileSystem {
    * @returns {FileMeta}
    */
   async getFileMeta(path) {
-    const pathElements = path.split("/")
-    const fileName = pathElements.pop()
-    const directoryName = pathElements.join("/") || "/"
+    let [, directory, filename] = path.match(/^(.*)\/(.*)$/)
+    directory = directory || "/"
 
-    let file
-    for await (let _file of this.getFilesInDirectory(directoryName)) {
-      if (_file.name !== fileName) continue
-      file = _file
+    return new Promise(async (resolve, reject) => {
+      const transaction = await getQueryBuilder().setStoreNames(META_STORAGE_NAME).createTransaction()
+      const pathNameIndex = transaction.objectStore(META_STORAGE_NAME).index("path-name")
+      const request = pathNameIndex.get(IDBKeyRange.only([directory, filename]))
+      request.onsuccess = (e) => resolve(e.target.result)
+      request.onerror = (e) => reject(e)
+    })
+  }
+
+  /**
+   * @param {FileMeta} file
+   * @returns {FileMeta}
+   */
+  async updateFileMeta(file) {
+    if (!file.fileId) {
+      throw new Error("Failed to update file meta. File doesn't exists.")
     }
 
-    return file
+    await getQueryBuilder()
+      .setStoreNames([META_STORAGE_NAME])
+      .doInTransaction("readwrite", async (transaction) => {
+        const metaStore = transaction.objectStore(META_STORAGE_NAME)
+        const _request = metaStore.get(file.fileId)
+        _request.onsuccess = () => metaStore.put(file)
+      })
+    systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DIRECTORY_CHANGED, file.path)
   }
 
   /**
@@ -229,7 +276,15 @@ class FileSystem {
    */
   async uploadFilesList(files, path, onProgress = () => {}) {
     systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILES_STARTED)
-    for (let file of files) await this.uploadFile(file, path, (e) => onProgress(file, e))
+
+    let isAborted = false
+    systemBus.addEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILES_ABORT, () => (isAborted = true), { once: true })
+
+    for (let file of files) {
+      if (isAborted) break
+      await this.uploadFile(file, path, (e) => onProgress(file, e))
+    }
+
     systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILES_FINISHED)
   }
 
@@ -252,6 +307,16 @@ class FileSystem {
       throw new Error("Failed to upload file. File is broken or has not filename.")
     }
 
+    const isFileExists = await this.getFileMeta(`${path}/${file.name}`)
+    if (isFileExists) {
+      throw new Error(`A file with name "${file.name}" already exists.`)
+    }
+
+    const { quota, usage } = await getMemoryUsage()
+    if (usage + file.size >= quota) {
+      throw new Error(`Not enough memory to upload the file. Used ${bytesToReadable(usage)} of ${bytesToReadable(quota)}`)
+    }
+
     const reader = new FileReader()
     reader.addEventListener("progress", (e) => onProgress(e))
 
@@ -270,6 +335,11 @@ class FileSystem {
         .doInTransaction("readwrite", async (transaction) => {
           const fileContent = arrayBuffer
           const filesStore = transaction.objectStore(FILE_STORAGE_NAME)
+          const metaStore = transaction.objectStore(META_STORAGE_NAME)
+
+          /**
+           * Check file exists
+           */
 
           metaInfo.fileId = await new Promise((resolve, reject) => {
             const request = filesStore.add(fileContent)
@@ -277,7 +347,6 @@ class FileSystem {
             request.onerror = () => reject(request.error)
           })
 
-          const metaStore = transaction.objectStore(META_STORAGE_NAME)
           metaStore.add(metaInfo)
         })
 
@@ -314,9 +383,13 @@ class FileSystem {
   async deleteFilesList(files, onProgress = () => {}) {
     systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DELETE_FILES_STARTED)
 
+    let isAborted = false
+    systemBus.addEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DELETE_FILES_ABORT, () => (isAborted = true), { once: true })
+
     const total = files.length
     let deletedCount = 0
     for (let file of files) {
+      if (isAborted) break
       await this.deleteFile(file)
       onProgress(file, new ProgressEvent("file-delete", { total, loaded: ++deletedCount }))
     }
@@ -327,11 +400,6 @@ class FileSystem {
    * @param {FileMeta} file
    */
   async deleteFile(file) {
-    /**
-     * @todo delete this analog of `sleep` function
-     */
-    await new Promise((resolve) => setTimeout(() => resolve(), 3000))
-
     if (!file?.fileId) {
       throw new Error("Failed to delete file. File is broken or has not filename.")
     }
@@ -366,6 +434,10 @@ const fileSystem = new FileSystem()
 systemBus
   .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_META, async (filePath, response, next) => {
     response.file = await fileSystem.getFileMeta(filePath)
+    next()
+  })
+  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.UPDATE_FILE_META, async (file, response, next) => {
+    response.file = await fileSystem.updateFileMeta(file)
     next()
   })
   .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_CONTENT, async (fileId, response, next) => {

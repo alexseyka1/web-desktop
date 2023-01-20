@@ -9,8 +9,10 @@ import ImageViewer from "./applications/ImageViewer"
 import Notepad from "./applications/Notepad"
 import WindowMessage, { WINDOW_MESSAGE_TYPES } from "./modules/Window/WindowMessage"
 import Terminal from "./applications/Terminal"
+import FileExplorer from "./applications/FileExplorer"
+import Window from "./modules/Window"
 
-globalThis.__DEBUG__ = true
+globalThis.__DEBUG__ = false
 
 document.addEventListener("DOMContentLoaded", async () => {
   /**
@@ -88,6 +90,9 @@ document.addEventListener("DOMContentLoaded", async () => {
   /**
    * MOVE THIS FUNCIONALITY TO SEPARATE CLASS (SOME APPLICATION RUNNER)
    */
-  const app = new Terminal()
-  app.main(["/applications2"])
+  // const app = new Terminal()
+  // app.main(["/applications"])
+
+  const app = new FileExplorer()
+  app.main(["/home/images"])
 })

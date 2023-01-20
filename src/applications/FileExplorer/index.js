@@ -1,5 +1,5 @@
 import Window, { WindowEvents } from "../../modules/Window"
-import { createWindowMessages } from "../../modules/Window/WindowMessage"
+import { WindowMessages } from "../../modules/Window/WindowMessage"
 import { FileMeta } from "../../modules/FileSystem"
 import LocationStack from "./LocationStack"
 import { bytesToReadable } from "../../modules/FileSystem/Storage"
@@ -7,64 +7,85 @@ import WindowProcess, { WindowProcessItem, WINDOW_PROCESS_EVENTS } from "../../m
 import "./styles.scss"
 import { addDropdownSubMenu } from "../../modules/MenuPanel"
 import systemBus, { SYSTEM_BUS_COMMANDS, SYSTEM_BUS_EVENTS } from "../../modules/SystemBus"
+import Application from "../../modules/Application"
+import imageProcessing from "../../modules/ImageProcessing"
 
 /**
  * @param {FileMeta} file
  * @returns {string}
  */
 const getFileIcon = (file) => {
-  if (file.isDirectory) return "📁"
+  if (file.isDirectory) return `<span class="material-symbols-outlined">folder</span>`
   switch (true) {
     case file.mimeType.startsWith("image/"):
-      return "🖼️"
+      if (file.thumbnailBuffer) {
+        const _blob = new Blob([file.thumbnailBuffer], { type: file.mimeType })
+        const _imageUrl = URL.createObjectURL(_blob)
+        return `<img src="${_imageUrl}"/>`
+      } else {
+        imageProcessing.executeCommand("create-image-thumbnail", file.fullPath).then(() => {
+          systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DIRECTORY_CHANGED, file.path)
+        })
+      }
+      return `<span class="material-symbols-outlined">imagesmode</span>`
     case file.mimeType.startsWith("video/"):
-      return "📼"
+      return `<span class="material-symbols-outlined">smart_display</span>`
     case file.mimeType === "application/msword":
-      return "📑"
+      return `<span class="material-symbols-outlined">description</span>`
     case file.mimeType === "application/pdf":
-      return "📈"
+      return `<span class="material-symbols-outlined">picture_as_pdf</span>`
     case file.mimeType === "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
-      return "📔"
+      return `<span class="material-symbols-outlined">table_view</span>`
     case file.mimeType === "text/plain":
-      return "🗒️"
+      return `<span class="material-symbols-outlined">article</span>`
     default:
-      return "📄"
+      return `<span class="material-symbols-outlined">note</span>`
   }
 }
 
-class FileExplorer extends Window {
+class FileExplorer extends Application {
   /** @type {string} */
   #prevRenderedPath
   /** @type {Set<FileMeta>} */
   #selectedFiles = new Set()
   /** @type {Map<FileMeta, number>} */
   #showedFiles = new Map()
+  /** @type {Window} */
+  #window
 
-  constructor(params) {
-    super(params)
+  async main(args) {
+    this.#window = await this.createWindow({
+      width: 500,
+      height: 400,
+      title: "File Explorer",
+      icon: `<span class="material-symbols-outlined">home_storage</span>`,
+    })
 
-    this.title = "File Explorer"
-    this.icon = "🗄️"
-    this.locationStack = new LocationStack(params?.path || "/home")
+    let path
+    if (args) path = args[0]
+
+    this.locationStack = new LocationStack(path || "/home")
     this.locationStack.addEventListener("change", (e) => {
       if (this.locationStringElement) this.locationStringElement.value = this.locationStack.current
       this.#rerenderWindow()
     })
 
-    this.windowMessages = createWindowMessages(this)
+    this.windowMessages = new WindowMessages(this)
     this.#registerKeyboardEvents()
+    await this.init()
+    this.run()
   }
 
   get topButtonsElement() {
-    return this.domElement.querySelector(".file-explorer-top-bar__buttons")
+    return this.#window.contentElement.querySelector(".file-explorer-top-bar__buttons")
   }
 
   get directoryContentElement() {
-    return this.domElement.querySelector(".file-explorer__directory-content")
+    return this.#window.contentElement.querySelector(".file-explorer__directory-content")
   }
 
   get locationForm() {
-    return this.domElement.querySelector(".file-explorer-top-bar__path")
+    return this.#window.contentElement.querySelector(".file-explorer-top-bar__path")
   }
 
   get locationStringElement() {
@@ -73,33 +94,67 @@ class FileExplorer extends Window {
   }
 
   get bottomBarElement() {
-    return this.domElement.querySelector(".file-explorer__bottom-bar")
+    return this.#window.contentElement.querySelector(".file-explorer__bottom-bar")
+  }
+
+  get selectedFileNames() {
+    const selectedFileNames = new Set()
+    for (let _file of this.#selectedFiles.keys()) {
+      selectedFileNames.add(_file.name)
+    }
+    return selectedFileNames
   }
 
   #registerKeyboardEvents() {
-    const keyPressHandler = (e) => {
-      console.log(e)
+    const keyDownHandler = (e) => {
+      if (e.key.toLowerCase() === "escape") {
+        /**
+         * On escape pressed
+         */
+        this.#selectedFiles.clear()
+        this.#rerenderWindow()
+      } else if (e.key.toLowerCase() === "a" && e.metaKey) {
+        /**
+         * On select all files
+         */
+        this.#selectedFiles.clear()
+        for (let file of this.#showedFiles.keys()) {
+          this.#selectedFiles.add(file)
+        }
+        this.#rerenderWindow()
+      } else if (["delete", "backspace"].includes(e.key.toLowerCase())) {
+        /**
+         * On delete pressed
+         */
+        const filesCount = this.#selectedFiles.size
+        if (!filesCount) return
+        const _deleteFiles = () => this.#deleteFiles(Array.from(this.#selectedFiles))
+        this.windowMessages.showMessageQuestion(
+          "Are you sure?",
+          `Are you sure you want to delete ${filesCount} file${filesCount > 1 ? "s" : ""}?`,
+          _deleteFiles
+        )
+      }
     }
 
+    globalThis.addEventListener("keydown", keyDownHandler)
     this.addEventListener(WindowEvents.FOCUSED, () => {
-      window.addEventListener("keypress", keyPressHandler)
+      globalThis.addEventListener("keydown", keyDownHandler)
     })
     this.addEventListener(WindowEvents.BLURED, () => {
-      window.removeEventListener("keypress", keyPressHandler)
+      globalThis.removeEventListener("keydown", keyDownHandler)
     })
   }
 
   #rerenderWindow() {
-    this.#selectedFiles.clear()
     this.#renderTopbuttons()
     this.#renderDirectoryContent()
     this.#renderBottomBar()
   }
 
   async init() {
-    super.init()
-    this.domElement.classList.add("file-explorer")
-    this.domElement.innerHTML = `
+    this.#window.contentElement.classList.add("file-explorer")
+    this.#window.contentElement.innerHTML = `
       <div class="file-explorer__top-bar">
         <div class="file-explorer-top-bar__buttons"></div>
         <form class="file-explorer-top-bar__path">
@@ -110,9 +165,9 @@ class FileExplorer extends Window {
       <div class="file-explorer__bottom-bar"></div>
     `
 
-    this.domElement.addEventListener("mousedown", () => {
+    this.#window.contentElement.addEventListener("mousedown", () => {
       this.#selectedFiles.clear()
-      this.domElement.querySelectorAll(".files-grid-item.active").forEach((elem) => elem.classList.remove("active"))
+      this.#window.contentElement.querySelectorAll(".files-grid-item.active").forEach((elem) => elem.classList.remove("active"))
       this.#renderBottomBar()
     })
 
@@ -264,6 +319,7 @@ class FileExplorer extends Window {
 
       const fileLink = document.createElement("div")
       fileLink.className = "files-grid-item"
+      if (this.selectedFileNames.has(file.name)) fileLink.classList.add("active")
       if (file.isDirectory) fileLink.classList.add("files-grid-item__directory")
       fileLink.innerHTML = `
         <div class="files-grid-item__icon">${icon}</div>
@@ -290,7 +346,7 @@ class FileExplorer extends Window {
           /** Select list of files with SHIFT key */
           if (!this.#selectedFiles.size) addFileToList(file, fileLink)
           else {
-            this.domElement.querySelectorAll(".files-grid-item.active").forEach((elem) => elem.classList.remove("active"))
+            this.#window.contentElement.querySelectorAll(".files-grid-item.active").forEach((elem) => elem.classList.remove("active"))
 
             const firstSelectedFile = this.#selectedFiles.values().next().value
             const fromIndex = this.#showedFiles.get(firstSelectedFile)
@@ -305,7 +361,7 @@ class FileExplorer extends Window {
                 }
 
                 if (!this.#selectedFiles.has(_showedFile)) this.#selectedFiles.add(_showedFile)
-                const _elem = this.domElement.querySelectorAll(".files-grid-item")[_fileIndex]
+                const _elem = this.#window.contentElement.querySelectorAll(".files-grid-item")[_fileIndex]
                 if (_elem) _elem.classList.add("active")
                 if (++_fileIndex > toIndex) break
               }
@@ -313,7 +369,7 @@ class FileExplorer extends Window {
           }
         } else {
           /** Just click on file */
-          this.domElement.querySelectorAll(".files-grid-item.active").forEach((elem) => elem.classList.remove("active"))
+          this.#window.contentElement.querySelectorAll(".files-grid-item.active").forEach((elem) => elem.classList.remove("active"))
           this.#selectedFiles.clear()
           this.#selectedFiles.add(file)
           fileLink.classList.add("active")
@@ -385,7 +441,7 @@ class FileExplorer extends Window {
     let loadingWindow
     const closeLoadingWindow = () => {
       if (loadingWindow) {
-        loadingWindow.dispatchEvent(new CustomEvent(WindowEvents.CLOSE, { detail: { forced: true } }))
+        loadingWindow._window.dispatchEvent(new CustomEvent(WindowEvents.CLOSE, { detail: { forced: true } }))
       }
     }
 
@@ -398,32 +454,37 @@ class FileExplorer extends Window {
         if (!loadingWindow) return
         const _percent = (e.loaded / e.total) * 100
         loadingProcesses[_file.name].percentage = _percent
-        loadingWindow.dispatchEvent(new CustomEvent(WINDOW_PROCESS_EVENTS.UPDATE_PROCESSES, { detail: Object.values(loadingProcesses) }))
+        loadingWindow._window.dispatchEvent(new CustomEvent(WINDOW_PROCESS_EVENTS.UPDATE_PROCESSES, { detail: Object.values(loadingProcesses) }))
       }
 
-      const startUploadingHandler = () => {
-        loadingWindow = new WindowProcess({
-          title: "Uploading files",
-          processes: Object.values(loadingProcesses),
-          onCancelProcess: () => {
-            throw new Error("Files uploading cancelled.")
+      const startUploadingHandler = async () => {
+        loadingWindow = await this.createWindow(
+          {
+            title: "Uploading files",
+            processes: Object.values(loadingProcesses),
+            onCancelProcess: () => {
+              systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILES_ABORT)
+            },
           },
-        })
-        systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, loadingWindow)
+          WindowProcess
+        )
 
-        systemBus.addEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILES_FINISHED, () => {
-          systemBus.removeEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILES_STARTED, startUploadingHandler)
-          systemBus.removeEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILE_PROGRESS, uploadFileProgressHandler)
-          closeLoadingWindow()
-        })
+        systemBus.addEventListener(
+          SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILES_FINISHED,
+          () => {
+            systemBus.removeEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILE_PROGRESS, uploadFileProgressHandler)
+            closeLoadingWindow()
+          },
+          { once: true }
+        )
       }
-      systemBus.addEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILES_STARTED, startUploadingHandler)
+      systemBus.addEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILES_STARTED, startUploadingHandler, { once: true })
       systemBus.addEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.UPLOAD_FILE_PROGRESS, uploadFileProgressHandler)
 
       await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.UPLOAD_FILES_LIST, { files, path })
     } catch (e) {
       closeLoadingWindow()
-      return this.windowMessages.showMessageError("Failed to upload file", e.message)
+      return this.windowMessages.showMessageError(`Failed to upload file${files.length > 1 ? "s" : ""}`, e.message)
     }
   }
 
@@ -434,7 +495,7 @@ class FileExplorer extends Window {
     let loadingWindow
     const closeLoadingWindow = () => {
       if (loadingWindow) {
-        loadingWindow.dispatchEvent(new CustomEvent(WindowEvents.CLOSE, { detail: { forced: true } }))
+        loadingWindow._window.dispatchEvent(new CustomEvent(WindowEvents.CLOSE, { detail: { forced: true } }))
       }
     }
 
@@ -445,26 +506,27 @@ class FileExplorer extends Window {
         if (!loadingWindow) return
         const _percent = (e.loaded / e.total) * 100
         loadingProcess.percentage = _percent
-        loadingWindow.dispatchEvent(new CustomEvent(WINDOW_PROCESS_EVENTS.UPDATE_PROCESSES, { detail: [loadingProcess] }))
+        loadingWindow._window.dispatchEvent(new CustomEvent(WINDOW_PROCESS_EVENTS.UPDATE_PROCESSES, { detail: [loadingProcess] }))
       }
 
-      const startDeletingHandler = () => {
-        loadingWindow = new WindowProcess({
-          title: "Deleting files",
-          processes: [loadingProcess],
-          onCancelProcess: () => {
-            throw new Error("Files deleting cancelled.")
+      const startDeletingHandler = async () => {
+        loadingWindow = await this.createWindow(
+          {
+            title: "Deleting files",
+            processes: [loadingProcess],
+            onCancelProcess: () => {
+              systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DELETE_FILES_ABORT)
+            },
           },
-        })
-        systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, loadingWindow)
+          WindowProcess
+        )
 
         systemBus.addEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DELETE_FILES_FINISHED, () => {
-          systemBus.removeEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DELETE_FILES_STARTED, startDeletingHandler)
           systemBus.removeEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DELETE_FILE_PROGRESS, deleteFileProgressHandler)
           closeLoadingWindow()
         })
       }
-      systemBus.addEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DELETE_FILES_STARTED, startDeletingHandler)
+      systemBus.addEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DELETE_FILES_STARTED, startDeletingHandler, { once: true })
       systemBus.addEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DELETE_FILE_PROGRESS, deleteFileProgressHandler)
 
       await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.DELETE_FILES_LIST, files)
@@ -532,7 +594,7 @@ class FileExplorer extends Window {
       dropZone.style.visibility = "hidden"
       isDragChecked = false
     })
-    this.domElement.append(dropZone)
+    this.#window.contentElement.append(dropZone)
   }
 
   async run() {
@@ -542,7 +604,10 @@ class FileExplorer extends Window {
     systemBus.addEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DIRECTORY_CHANGED, (e) => {
       if (e.detail === this.locationStack.current) {
         if (this.changingDirectoryTimer) clearTimeout(this.changingDirectoryTimer)
-        this.changingDirectoryTimer = setTimeout(() => this.#rerenderWindow(), 20)
+        this.changingDirectoryTimer = setTimeout(() => {
+          this.#selectedFiles.clear()
+          this.#rerenderWindow()
+        }, 20)
       }
     })
   }

@@ -7,6 +7,7 @@ export const SYSTEM_BUS_COMMANDS = {
   FILE_SYSTEM: {
     OPEN_FILE: "file-system:open-file",
     READ_FILE_META: "file-system:read-file-meta",
+    UPDATE_FILE_META: "file-system:update-file-meta",
     READ_FILE_CONTENT: "file-system:read-file-content",
     CREATE_FILE_STRUCTURE: "file-system:create-file-structure",
     IS_STRUCTURE_EXISTS: "file-system:is-structure-exists",
@@ -26,9 +27,11 @@ export const SYSTEM_BUS_EVENTS = {
     DIRECTORY_CHANGED: "file-system:directory-changed",
     UPLOAD_FILES_STARTED: "file-system:upload-files-started",
     UPLOAD_FILE_PROGRESS: "file-system:upload-file-progress",
+    UPLOAD_FILES_ABORT: "file-system:upload-files-abort",
     UPLOAD_FILES_FINISHED: "file-system:upload-files-finished",
     DELETE_FILES_STARTED: "file-system:delete-files-started",
     DELETE_FILE_PROGRESS: "file-system:delete-file-progress",
+    DELETE_FILES_ABORT: "file-system:delete-files-abort",
     DELETE_FILES_FINISHED: "file-system:delete-files-finished",
   },
   WINDOW_SYSTEM: {
@@ -160,6 +163,12 @@ class SystemBus {
         }, this.#timeout)
       }
 
+      const catchErrors = (result) => {
+        if (result instanceof Promise) {
+          result.catch((e) => reject(e))
+        }
+      }
+
       const getNextCallback = (item) => {
         if (item.next && item.next.value) {
           return () => {
@@ -168,14 +177,14 @@ class SystemBus {
               return
             }
             rerunTimer()
-            item.next.value.apply(item.next, [...args, response, getNextCallback(item.next)])
+            catchErrors(item.next.value.apply(item.next, [...args, response, getNextCallback(item.next)]))
           }
         }
         return () => resolve({ ...response })
       }
 
       rerunTimer()
-      head.value.apply(this, [...args, response, getNextCallback(head)])
+      catchErrors(head.value.apply(this, [...args, response, getNextCallback(head)]))
     }).then((result) => {
       if (globalThis.__DEBUG__) {
         console.info(`✅[system-bus][command][resolve] ${commandName}`, { result })

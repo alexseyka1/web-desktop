@@ -33,18 +33,6 @@ class WindowProcess extends WindowMessage {
     if (params?.processes && Array.isArray(params.processes)) this.#processes = JSON.parse(JSON.stringify(params?.processes))
     if (params?.title) this.#prevTitle = params.title
 
-    this.domElement.classList.add("window-process")
-
-    /**
-     * CENTER WINDOW
-     */
-    setTimeout(() => {
-      const { width, height } = this.domElement.parentElement.getBoundingClientRect()
-      const _positionX = width / 2 - params.width / 2,
-        _positionY = height / 2 - (params.height / 2 || 150)
-      this.position.set(_positionX, _positionY)
-    })
-
     /**
      * ON CLOSE WINDOW
      */
@@ -201,6 +189,7 @@ class WindowProcess extends WindowMessage {
   }
 
   run() {
+    this.domElement.closest(".window").classList.add("window-process")
     this.#render()
     this.#registerEvents()
   }

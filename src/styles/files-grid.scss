@@ -29,11 +29,27 @@
     }
 
     &__icon {
-      width: 75%;
+      width: 100%;
       aspect-ratio: 1;
       line-height: 3rem;
-      font-size: 3rem;
       overflow: hidden;
+      text-align: center;
+      font-size: 3rem;
+      color: #2196f3;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      .material-symbols-outlined {
+        font-size: 54px;
+      }
+
+      & > img {
+        width: auto;
+        height: auto;
+        max-width: 100%;
+        max-height: 100%;
+      }
     }
     &__title {
       width: 100%;
@@ -46,7 +62,15 @@
 
     &__directory {
       & .files-grid-item__icon {
-        filter: sepia(1);
+        .material-symbols-outlined {
+          font-variation-settings:
+          'FILL' 1,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 48;
+        }
+        
+        color: #e1ae63;
       }
     }
   }

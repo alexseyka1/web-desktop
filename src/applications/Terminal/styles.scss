@@ -23,6 +23,7 @@
   }
 
   &__command-string {
+    white-space: pre-wrap;
     position: relative;
     margin: 0;
   }
@@ -30,7 +31,7 @@
   &__cursor {
     height: 1rem;
     width: 1ch;
-    background: white;
+    backdrop-filter: invert(1);
     display: inline-block;
     animation: cursor-blinker 1s steps(2, start) infinite;
     position: absolute;
