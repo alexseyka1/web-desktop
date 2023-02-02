@@ -1,3 +1,5 @@
+import Hashes from "../../classes/Hashes"
+
 class ImageProcessing {
   #worker
 
@@ -17,18 +19,18 @@ class ImageProcessing {
    * @returns {Promise<any[]>}
    */
   async executeCommand(command, ...props) {
-    const commandId = `${command.toString(36)}_${Date.now().toString(36)}`
+    const commandId = Hashes.uuidv4()
 
     return new Promise((resolve) => {
       const worker = this.#getWorker()
-      worker.addEventListener(
-        "message",
-        (e) => {
-          const [_commandId, ...params] = e.data
-          if (_commandId === commandId) resolve(params)
-        },
-        { once: true }
-      )
+      const _handler = (e) => {
+        const [_commandId, ...params] = e.data
+        if (_commandId === commandId) {
+          worker.removeEventListener("message", _handler)
+          resolve(params)
+        }
+      }
+      worker.addEventListener("message", _handler)
       worker.postMessage([command, commandId, ...props])
     })
   }

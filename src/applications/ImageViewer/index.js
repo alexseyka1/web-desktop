@@ -1,10 +1,13 @@
-import Window, { WindowEvents } from "../../modules/Window"
 import { WindowMessages } from "../../modules/Window/WindowMessage"
 import gesturesHandler from "../../modules/HandleGestures"
 import "./styles.scss"
 import imageProcessing from "../../modules/ImageProcessing"
+import Application from "../../modules/Application"
+import WindowWrapper from "../../modules/WindowSystem/WindowWrapper"
+import systemBus, { SYSTEM_BUS_COMMANDS } from "../../modules/SystemBus"
+import manifest from "./manifest.json"
 
-class ImageViewer extends Window {
+class ImageViewer extends Application {
   MIN_ZOOM = 0.1
   MAX_ZOOM = 100
 
@@ -14,23 +17,79 @@ class ImageViewer extends Window {
   _transformMatrix = {
     scale: 1,
   }
+  /** @type {WindowWrapper} */
+  #window
 
-  constructor(props) {
-    props = { width: 500, height: 400, ...props }
-    super(props)
+  get loaderElement() {
+    return this.#window.contentElement.querySelector(".image-viewer__loader")
+  }
+
+  #hideLoader() {
+    this.loaderElement.style.visibility = "hidden"
+  }
+
+  async main(filePaths) {
     this.windowMessages = new WindowMessages(this)
-    this.filePath = props?.filePath
+    this.filePath = filePaths?.[0] || null
 
-    this.domElement.classList.add("image-viewer")
-    this.domElement.innerHTML = `
-      <div class="image-viewer__loader"></div>
+    this.#window = await this.createWindow({
+      width: 500,
+      height: 400,
+      title: manifest.appName,
+      icon: manifest.icon,
+    })
+    this.#window.domElement.classList.add("image-viewer")
+    this.#window.contentElement.innerHTML = `
       <div class="image-viewer__image"></div>
+      <div class="image-viewer__loader"></div>
     `
-    this.icon = "🖼️"
+
+    if (!this.filePath) {
+      const selectedFiles = await systemBus.execute(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_COMMAND, "file-explorer.app --view=table")
+      console.log({ selectedFiles })
+      // this.windowMessages.showMessageError("Failed to open file", "File is not specified")
+    } else {
+      let filePath = this.filePath
+      if (Array.isArray(filePath)) {
+        filePath = filePath.pop()
+      }
+
+      imageProcessing.executeCommand("open-image", filePath).then(([url, fileMeta]) => {
+        this.#workerCommands["set-parsed-image"](url, fileMeta)
+      })
+    }
+
+    if (!window.DOMMatrix) {
+      if (window.WebKitCSSMatrix) {
+        window.DOMMatrix = window.WebKitCSSMatrix
+      } else {
+        throw new Error("Couldn't find a DOM Matrix implementation")
+      }
+    }
+
+    let origin
+    let initialCtm = new DOMMatrix()
+    let el = this.imageContentElement
+    el.style.transformOrigin = "0 0"
+
+    gesturesHandler.handleGestures(this.#window.domElement, {
+      onGestureStart(gesture) {
+        el.style.transform = ""
+        origin = gesturesHandler.getOrigin(el, gesture)
+        gesturesHandler.applyMatrix(el, gesturesHandler.gestureToMatrix(gesture, origin).multiply(initialCtm))
+      },
+      onGesture(gesture) {
+        gesturesHandler.applyMatrix(el, gesturesHandler.gestureToMatrix(gesture, origin).multiply(initialCtm))
+      },
+      onGestureEnd(gesture) {
+        initialCtm = gesturesHandler.gestureToMatrix(gesture, origin).multiply(initialCtm)
+        gesturesHandler.applyMatrix(el, initialCtm)
+      },
+    })
   }
 
   get imageContentElement() {
-    return this.domElement.querySelector(".image-viewer__image")
+    return this.#window.contentElement.querySelector(".image-viewer__image")
   }
 
   #resetTransformMatrix() {
@@ -48,54 +107,15 @@ class ImageViewer extends Window {
     "set-parsed-image": (url, fileMeta) => {
       this.#resetTransformMatrix()
       this.#applyImageTransformMatrix()
-      this.imageContentElement.style.backgroundImage = `url(${url})`
-      this.title = fileMeta.name
-    },
-  }
 
-  async run() {
-    if (!this.filePath) {
-      this.windowMessages.showMessageError("Failed to open file", "File is not specified")
-      this.dispatchEvent(new Event(WindowEvents.CLOSE))
-      return
-    }
-
-    let filePath = this.filePath
-    if (Array.isArray(filePath)) {
-      filePath = filePath.pop()
-    }
-
-    imageProcessing.executeCommand("open-image", filePath).then(([url, fileMeta]) => {
-      this.#workerCommands["set-parsed-image"](url, fileMeta)
-    })
-
-    if (!window.DOMMatrix) {
-      if (window.WebKitCSSMatrix) {
-        window.DOMMatrix = window.WebKitCSSMatrix
-      } else {
-        throw new Error("Couldn't find a DOM Matrix implementation")
+      const _image = new Image()
+      _image.onload = () => {
+        this.imageContentElement.style.backgroundImage = `url(${_image.src})`
+        this.#window._window.title = fileMeta.name
+        setTimeout(() => this.#hideLoader(), 50)
       }
-    }
-
-    let origin
-    let initialCtm = new DOMMatrix()
-    let el = this.imageContentElement
-    el.style.transformOrigin = "0 0"
-
-    gesturesHandler.handleGestures(this.domElement, {
-      onGestureStart(gesture) {
-        el.style.transform = ""
-        origin = gesturesHandler.getOrigin(el, gesture)
-        gesturesHandler.applyMatrix(el, gesturesHandler.gestureToMatrix(gesture, origin).multiply(initialCtm))
-      },
-      onGesture(gesture) {
-        gesturesHandler.applyMatrix(el, gesturesHandler.gestureToMatrix(gesture, origin).multiply(initialCtm))
-      },
-      onGestureEnd(gesture) {
-        initialCtm = gesturesHandler.gestureToMatrix(gesture, origin).multiply(initialCtm)
-        gesturesHandler.applyMatrix(el, initialCtm)
-      },
-    })
+      _image.src = url
+    },
   }
 }
 

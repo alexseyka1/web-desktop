@@ -9,6 +9,8 @@ export const SYSTEM_BUS_COMMANDS = {
     READ_FILE_META: "file-system:read-file-meta",
     UPDATE_FILE_META: "file-system:update-file-meta",
     READ_FILE_CONTENT: "file-system:read-file-content",
+    GET_FILE_CONTENT_BY_ID: "file-system:get-file-content-by-id",
+    WRITE_FILE_CONTENT: "file-system:write-file-content",
     CREATE_FILE_STRUCTURE: "file-system:create-file-structure",
     IS_STRUCTURE_EXISTS: "file-system:is-structure-exists",
     GET_FILES_ITERATOR: "file-system:get-files-iterator",
@@ -16,8 +18,9 @@ export const SYSTEM_BUS_COMMANDS = {
     DELETE_FILES_LIST: "file-system:delete-files-list",
   },
   APP_RUNNER: {
-    RUN: "app-runner:run",
-    RUN_WITH_DEFINED_COMMANDS: "app-runner:run-with-defined-commands",
+    RUN_COMMAND: "app-runner:run-command",
+    RUN_COMMAND_WITH_DEFINED_COMMANDS: "app-runner:run-command-with-defined-commands",
+    RUN_APPLICATION: "app-runner:run-application",
   },
 }
 
@@ -25,6 +28,7 @@ export const SYSTEM_BUS_EVENTS = {
   FILE_SYSTEM: {
     STRUCTURE_CREATED: "file-system:structure-created",
     DIRECTORY_CHANGED: "file-system:directory-changed",
+    FILE_UPDATED: "file-system:file-updated",
     UPLOAD_FILES_STARTED: "file-system:upload-files-started",
     UPLOAD_FILE_PROGRESS: "file-system:upload-file-progress",
     UPLOAD_FILES_ABORT: "file-system:upload-files-abort",

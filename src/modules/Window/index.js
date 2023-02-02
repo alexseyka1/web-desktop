@@ -12,6 +12,7 @@ export const WindowEvents = {
   HANDLE_STARTED: "window-handle-started",
   HANDLE_STOPPED: "window-handle-stopped",
   MOVED: "window-moved",
+  RESIZED: "window-resized",
 }
 
 class Window extends EventTarget {

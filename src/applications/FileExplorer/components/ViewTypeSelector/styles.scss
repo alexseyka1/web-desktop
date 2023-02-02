@@ -1,0 +1,23 @@
+@import "../../../../styles/variables.scss";
+
+.file-explorer__view-selector {
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  gap: 0.25rem;
+  margin-left: .5rem;
+
+  & > * {
+    border: none;
+    padding: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+
+
+    &.active {
+      box-shadow: 0 0 0 1px $primary inset;
+      background-color: lighten($primary, 35%);
+    }
+  }
+}

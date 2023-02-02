@@ -1,0 +1,6 @@
+{
+  "appName": "Image viewer",
+  "description": "Simplest image viewer",
+  "icon": "<span class=\"material-symbols-outlined\" style=\"color: #977bc9; font-variation-settings:'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48\">photo_library</span>",
+  "iconLarge": "<span class=\"material-symbols-outlined defined-app-icon\" style=\"background-color: #977bc9;\">photo_library</span>"
+}

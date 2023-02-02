@@ -1,5 +1,4 @@
 import Notepad from "../../applications/Notepad"
-import RandomColor from "../../applications/RandomColor"
 import { addDropdownSubMenu } from "../MenuPanel"
 import Vector from "../Vector"
 import Window, { WindowEvents } from "../Window"
@@ -16,7 +15,7 @@ class BottomBar {
 
   constructor(windowSystem) {
     this.windowSystem = windowSystem
-    this.#registerStartButton()
+    // this.#registerStartButton()
   }
 
   get domElement() {
@@ -24,9 +23,6 @@ class BottomBar {
       this.#domElement = document.createElement("div")
       this.#domElement.className = "bottom-bar"
       this.#domElement.innerHTML = `
-        <div class="bottom-bar__left-buttons">
-          <button class="bottom-bar__start">🚀 Start</button>
-        </div>
         <div class="bottom-bar__windows"></div>
         <div class="bottom-bar__right-buttons">
           <button>⬇️</button>
@@ -46,6 +42,14 @@ class BottomBar {
   }
 
   #registerStartButton() {
+    const template = document.createElement("template")
+    template.innerHTML = `
+      <div class="bottom-bar__left-buttons">
+        <button class="bottom-bar__start">🚀 Start</button>
+      </div>
+    `
+    this.domElement.prepend(template.content)
+
     this.startButton.addEventListener("click", () => {
       addDropdownSubMenu(
         [
@@ -54,13 +58,6 @@ class BottomBar {
             title: "Notepad",
             onClick: () => {
               this.windowSystem.attach(new Notepad({ x: 250, y: 200, width: 350, height: 350 }))
-            },
-          },
-          {
-            icon: "🌈",
-            title: "Random color Random color Random color Random color Random color Random color",
-            onClick: () => {
-              this.windowSystem.attach(new RandomColor({ x: 200, y: 150, width: 350, height: 200 }))
             },
           },
           {

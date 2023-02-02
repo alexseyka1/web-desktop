@@ -1,13 +1,13 @@
 import Application from "../../modules/Application"
 import "./styles.scss"
 import { WindowEvents } from "../../modules/Window"
-import appRunner, { getDefinedApplications } from "../../modules/AppRunner"
+import appRunner from "../../modules/AppRunner"
 import systemBus, { SYSTEM_BUS_COMMANDS } from "../../modules/SystemBus"
 import { resolvePath } from "../../modules/FileSystem"
 
 const MODES = {
   COMMANDS_TYPING: "mode:commands-typing",
-  APPLICATION_INPUT: "mode:APPLICATION_INPUT",
+  APPLICATION_INPUT: "mode:application-input",
 }
 
 const checkDirectoryExists = async (path) => {
@@ -36,6 +36,8 @@ class Terminal extends Application {
   #fileAutocomplete = {
     directory: null,
     results: [],
+    searchAll: null,
+    partName: null,
     currentFileIndex: 0,
   }
 
@@ -68,6 +70,7 @@ class Terminal extends Application {
   }
 
   async fetchAutocomplete() {
+    console.log("AUTOCOMPLETE START")
     if (this.#isAutocompleteRunning) return
     this.#isAutocompleteRunning = true
 
@@ -75,17 +78,44 @@ class Terminal extends Application {
     const _lastPart = _commandParts.pop()
     /** If string starts from ".", ".." or "/" */
     if ([".", "/"].includes(_lastPart.substring(0, 1)) || _lastPart.substring(0, 2) === "..") {
-      if (!/^.*\/.*/.test(this.#state.inputString)) return
+      if (!/^.*\/.*/.test(this.#state.inputString)) {
+        this.#isAutocompleteRunning = false
+        return
+      }
+
+      if (this.#fileAutocomplete.searchAll === null) {
+        /**
+         * Setting files search mode
+         */
+        /** User don't typed any suggestion */
+        if (/^.*\/$/.test(this.#state.inputString)) this.#fileAutocomplete.searchAll = true
+        /** User typed some suggestion */
+        if (/^[^\/]*\/[^\/]+$/.test(this.#state.inputString)) this.#fileAutocomplete.searchAll = false
+      }
+
       const _resolvedPath = resolvePath(this.#state.path, _lastPart)
       let [, _directory, _filename] = _resolvedPath.match(/^(.*)\/(.*)/)
       _directory = _directory || "/"
-      if (this.#fileAutocomplete.directory === _directory) return
+
+      if (this.#fileAutocomplete.directory === _directory) {
+        /**
+         * If user don't typed any suggestion and looking for all files in directory
+         * Or if user typed a parted of suggested filename and we already found this file
+         */
+        if (this.#fileAutocomplete.searchAll || (!this.#fileAutocomplete.searchAll && this.#fileAutocomplete.partName === _filename)) {
+          this.#isAutocompleteRunning = false
+          return
+        }
+      }
+      this.#fileAutocomplete.partName = _filename
 
       const { iterator } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.GET_FILES_ITERATOR, _directory)
       let _foundFileNames = []
       for await (let _file of iterator) {
         if (_filename.trim().length) {
+          /** If user typed a part of current file name */
           if (_file.name.startsWith(_filename)) _foundFileNames.push(_file.name)
+          if (_file.name === this.#fileAutocomplete.partName) this.#fileAutocomplete.partName = null
         } else {
           _foundFileNames.push(_file.name)
         }
@@ -113,6 +143,12 @@ class Terminal extends Application {
         removeHandler()
         _reject(value)
       }
+      const onInputStringChanged = () => {
+        if (this.#state.inputString.endsWith("/")) {
+          this.#fileAutocomplete.directory = null
+          this.#fileAutocomplete.searchAll = null
+        }
+      }
 
       const keydownHandler = async (e) => {
         e.preventDefault()
@@ -132,6 +168,7 @@ class Terminal extends Application {
           } else {
             this.#state.inputString = this.#state.inputString + e.key
           }
+          onInputStringChanged()
         } else if (e.ctrlKey && e.key === "c") {
           /**
            * Ctrl+C pressed
@@ -153,6 +190,7 @@ class Terminal extends Application {
           } else {
             this.#state.inputString = this.#state.inputString.substring(0, this.#state.inputString.length - 1)
           }
+          onInputStringChanged()
         } else if (e.key.toLowerCase() === "enter") {
           /**
            * Enter was pressed
@@ -162,6 +200,7 @@ class Terminal extends Application {
           this.#state.inputString = ""
           globalThis.removeEventListener("keydown", keydownHandler)
           resolve(_inputString)
+          onInputStringChanged()
         } else if (["arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) {
           /**
            * Some arrow key pressed
@@ -172,7 +211,10 @@ class Terminal extends Application {
            * Autocomplete command
            */
           await this.fetchAutocomplete()
-          console.log(this.filenameAutocomplete, this.#fileAutocomplete)
+          const _nextNameAutocomplete = this.filenameAutocomplete
+          if (_nextNameAutocomplete) {
+            this.#state.inputString = this.#state.inputString.replace(/^(.*\/).*$/, "$1") + _nextNameAutocomplete
+          }
         } else if (
           e.key.toLowerCase() === "tab" &&
           e.key.toLowerCase() === this.#lastChar &&
@@ -351,7 +393,8 @@ class Terminal extends Application {
   #log(message) {
     if (!message) return
     const addTextNode = (_text) => {
-      const span = document.createTextNode(_text)
+      const span = document.createElement("div")
+      span.innerText = _text.trim()
       this.logsElement.append(span)
     }
 
@@ -373,8 +416,9 @@ class Terminal extends Application {
     pwd: () => this.#state.path,
     cd: async ([path]) => {
       if (!path) return
-      checkDirectoryExists(path)
-      this.#state.path = path
+      const resolvedPath = resolvePath(this.#state.path, path)
+      if (resolvedPath !== "/") checkDirectoryExists(resolvedPath)
+      this.#state.path = resolvedPath
     },
     clear: () => {
       const el = this.#window.contentElement,
@@ -391,10 +435,25 @@ class Terminal extends Application {
     let _availableCommands = this.COMMANDS
 
     if (this.#state.path === "/applications") {
-      _availableCommands = { ..._availableCommands, ...getDefinedApplications() }
+      _availableCommands = { ..._availableCommands }
     }
 
-    await systemBus.execute(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_WITH_DEFINED_COMMANDS, [command, _availableCommands])
+    /**
+     * Replace each relative path to absolute one
+     */
+    let _command = command
+    const _paths = _command.match(/(\.{1,2})?\/[^\s]+/g)
+    if (_paths) {
+      for (let _path of _paths) {
+        _command = _command.replace(_path, resolvePath(this.#state.path, _path))
+      }
+    }
+
+    try {
+      await systemBus.execute(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_COMMAND_WITH_DEFINED_COMMANDS, [_command, _availableCommands])
+    } catch (e) {
+      this.#log(`Internal error: ${e.message}`)
+    }
 
     this.#state.isPromptActive = true
     this.#mode = MODES.COMMANDS_TYPING

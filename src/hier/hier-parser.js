@@ -141,6 +141,7 @@ const parseString = function (string, values) {
     }
   }
 
+  if (tokensStack.length === 1) return tokensStack.pop()
   return tokensStack
 }
 

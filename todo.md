@@ -14,9 +14,15 @@
   - [x] Add possibility to have more than one window
     - [ ] Main windows must have posibility to lock when added modal window (info/error/etc. messages)
 - [x] Add thumbnails generation for showing image previews in FileExplorer
-- [ ] Rewrite FileExplorer and ImageViewer as new Application class
-- [ ] Add posibility to run applications from terminal
-- [ ] Add file manifest.json to all applications that must contain application name and icon
+- [x] Rewrite FileExplorer and ImageViewer as new Application class
+- [x] Add posibility to run applications from terminal
+- [x] Add file manifest.json to all applications that must contain application name and icon
+- [x] Add posibility to walk through files in FileExplorer with keyboard arrows
+  - [x] And Tab (Shift+Tab)
+- [x] Add method for writing file content
+  - [x] Add feature to Notepad for open/save file's content
+- [x] Add grid/list view toggle to FileExplorer
+- [ ] Add posibility to select files by mouse
 - [ ] Add posibility to set wallpaper for folders
 - [ ] Add posibility to hide window header at all
 - [ ] Add posibility to leave window behind all other windows for creating Desktop FileExplorer window

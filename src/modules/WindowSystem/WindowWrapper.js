@@ -17,12 +17,22 @@ class WindowWrapper {
   minSize = new Vector(100, 100)
   maxSize
 
-  constructor(_window) {
+  constructor(_window, params = {}) {
     this._window = _window
 
     Object.assign(this, getEventTargetMixin(this._window))
     this._window.domElement.classList.add("content")
     this.contentElement.replaceWith(this._window.domElement)
+    this.setParams(params)
+  }
+
+  setParams(params = {}) {
+    if (params && typeof params === "object") {
+      Object.keys(params).forEach((param) => {
+        if (!(param in this)) return
+        this[param] = params[param]
+      })
+    }
   }
 
   /**
@@ -95,9 +105,6 @@ class WindowWrapper {
         this._changeTitle()
         this._window.dispatchEvent(new Event(WindowEvents.TITLE_CHANGED))
       },
-    })
-    withSharedValue(this, "icon", null, {
-      set: () => this._changeTitle(),
     })
   }
 

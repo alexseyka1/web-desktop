@@ -3,7 +3,7 @@ import "./styles/document.scss"
 import "./styles/dropdown-menu.scss"
 import Desktop from "./modules/desktop"
 import BottomBar from "./modules/desktop/BottomBar"
-import { FileMeta } from "./modules/FileSystem"
+import FileMeta from "./modules/FileSystem/FileMeta"
 import systemBus, { SYSTEM_BUS_COMMANDS, SYSTEM_BUS_EVENTS } from "./modules/SystemBus"
 import ImageViewer from "./applications/ImageViewer"
 import Notepad from "./applications/Notepad"
@@ -11,10 +11,34 @@ import WindowMessage, { WINDOW_MESSAGE_TYPES } from "./modules/Window/WindowMess
 import Terminal from "./applications/Terminal"
 import FileExplorer from "./applications/FileExplorer"
 import Window from "./modules/Window"
+import { getDefinedApplications } from "./classes/ApplicationFinder"
 
+globalThis.__DEV__ = false
 globalThis.__DEBUG__ = false
 
 document.addEventListener("DOMContentLoaded", async () => {
+  /**
+   * Import predefined applications
+   */
+  ;(() => {
+    const getAppName = (key) => key.replace(/\.\/(.*\/)?([^\/]+)$/, "$1").replace(/\/$/, "")
+    const importApps = (r) => {
+      globalThis.definedApplications = {}
+      r.keys().forEach((key) => {
+        globalThis.definedApplications[getAppName(key)] = r(key)
+      })
+    }
+    importApps(require.context("./applications/", true, /^\.\/[^\/]+\/index\.js$/))
+
+    const importManifests = (r) => {
+      globalThis.definedManifests = {}
+      r.keys().forEach((key) => {
+        globalThis.definedManifests[getAppName(key)] = r(key)
+      })
+    }
+    importManifests(require.context("./applications/", true, /^\.\/[^\/]+\/manifest\.json$/))
+  })()
+
   /**
    * INIT THE FILE SYSTEM
    */
@@ -28,16 +52,19 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 
   /**
-   * @todo move this to another file
+   * @todo move code below to separate file
    */
   systemBus.addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.OPEN_FILE, async (request, response, next) => {
     /** @type {FileMeta} */
     const { file } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_META, request)
     if (!file) return
     if (file.mimeType.startsWith("image/")) {
-      systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, new ImageViewer({ filePath: file.fullPath }))
-    } else if (file.mimeType.startsWith("text/")) {
-      systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, new Notepad({ filePath: file.fullPath }))
+      new ImageViewer().main([file.fullPath])
+    } else if (file.mimeType.startsWith("text/") || file.mimeType === "application/json") {
+      new Notepad().main([file.fullPath])
+    } else if (file.mimeType === "application") {
+      const apps = getDefinedApplications()
+      if (file.name in apps) systemBus.execute(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_APPLICATION, apps[file.name].module)
     } else {
       systemBus.execute(
         SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW,
@@ -94,5 +121,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   // app.main(["/applications"])
 
   const app = new FileExplorer()
-  app.main(["/home/images"])
+  app.main(["/applications"])
+
+  // new ImageViewer().main()
+
+  // const notepad = new Notepad()
+  // notepad.main(["/home/documents/hello.txt"])
 })

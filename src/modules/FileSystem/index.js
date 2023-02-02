@@ -1,4 +1,7 @@
+import { getDefinedApplications } from "../../classes/ApplicationFinder"
 import systemBus, { SYSTEM_BUS_COMMANDS, SYSTEM_BUS_EVENTS } from "../SystemBus"
+import File from "./File"
+import FileMeta from "./FileMeta"
 import StorageQueryBuilder, { bytesToReadable, getMemoryUsage } from "./Storage"
 import StorageIterator from "./StorageIterator"
 
@@ -16,7 +19,7 @@ export const resolvePath = (currentPath, location) => {
   for (let _part of _parts) {
     switch (_part) {
       case "..":
-        resultPath = resultPath.replace(/^(.*)\/.*/, "$1")
+        resultPath = resultPath.replace(/^(.*)\/.*/, "$1") || "/"
         break
       case ".":
         break
@@ -26,7 +29,36 @@ export const resolvePath = (currentPath, location) => {
     }
   }
 
-  return resultPath
+  return resultPath.replace(/\/{2,}/g, "/")
+}
+
+const FILE_PATH_REGEXP = /(.*\/)?([^\/]+)$/
+export const getDirectoryNameFromPath = (path) => {
+  return path.replace(FILE_PATH_REGEXP, "$1").replace(/\/*$/, "")
+}
+
+export const getFileNameFromPath = (path) => {
+  return path.replace(FILE_PATH_REGEXP, "$2")
+}
+
+/**
+ * @param {string} appName
+ * @param {object} info
+ * @returns {FileMeta}
+ */
+const getFileMetaForApplication = (appName, info) => {
+  return FileMeta.fromStorage({
+    fileId: appName
+      .split("")
+      .map((char) => char.charCodeAt(0).toString(36))
+      .join(""),
+    name: appName,
+    mimeType: "application",
+    path: "/applications",
+    icon: info?.iconLarge || info?.icon,
+    displayName: info?.appName,
+    description: info?.description,
+  })
 }
 
 /**
@@ -43,12 +75,6 @@ export const resolvePath = (currentPath, location) => {
  *     |   |   /text-document.txt         /home/documents/text-document.txt
  *     |   |   /pdf-document.pdf          /home/documents/pdf-document.pdf
  *     /applications                      /applications
- *     |   /deus-ex.app                   /applications/deus-ex.app
- *     |   /diablo-2.app                  /applications/diablo-2.app
- *     |   /counter-strike.app            /applications/counter-strike.app
- *     |   /microsoft-word.app            /applications/microsoft-word.app
- *     |   /microsoft-excel.app           /applications/microsoft-excel.app
- *     |   /notepad.app                   /applications/notepad.app
  *     /system                            /system
  */
 
@@ -79,6 +105,35 @@ const BASE_FILE_STRUCTURE = {
       },
       "pdf-document.pdf": {
         mimeType: "application/pdf",
+      },
+    },
+    ".config": {
+      "explorer-favorites.json": {
+        mimeType: "application/json",
+        content: new TextEncoder().encode(
+          JSON.stringify([
+            {
+              path: "/home",
+              title: "Home",
+            },
+            {
+              path: "/home/images",
+              title: "Images",
+            },
+            {
+              path: "/home/documents",
+              title: "Documents",
+            },
+            {
+              path: "/home/videos",
+              title: "Videos",
+            },
+            {
+              path: "/applications",
+              title: "Applications",
+            },
+          ])
+        ).buffer,
       },
     },
   },
@@ -128,17 +183,21 @@ const createInitialFileStructure = async (files, parent = null) => {
     const metaInfo = new FileMeta(filepath)
     metaInfo.size = Math.floor(Math.random() * 1024 * 1024 * 100) * 1024 // from 1Kb to 100Mb
 
+    let fileContent = new File(new TextEncoder().encode(filepath).buffer)
     if (!("mimeType" in file)) {
       metaInfo.isDirectory = true
       if (Object.keys(file).length) await createInitialFileStructure(file, metaInfo)
     } else {
+      if ("content" in file) {
+        fileContent = new File(file.content)
+        delete file.content
+      }
       Object.assign(metaInfo, file)
     }
 
     await getQueryBuilder()
       .setStoreNames([FILE_STORAGE_NAME, META_STORAGE_NAME])
       .doInTransaction("readwrite", async (transaction) => {
-        const fileContent = new File(new TextEncoder().encode(filepath).buffer)
         const filesStore = transaction.objectStore(FILE_STORAGE_NAME)
 
         metaInfo.fileId = await new Promise((resolve, reject) => {
@@ -153,67 +212,6 @@ const createInitialFileStructure = async (files, parent = null) => {
   }
 }
 
-/**
- * @property {number} id
- */
-class File {
-  /** @type {ArrayBuffer} */
-  arrayBuffer = null
-
-  /**
-   * @param {ArrayBuffer}
-   */
-  constructor(content) {
-    this.arrayBuffer = content
-  }
-}
-
-export class FileMeta {
-  /** @type {number} */
-  fileId = null
-  /** @type {string} */
-  name = null
-  /** @type {string} */
-  path = null
-
-  createdAt = new Date()
-  /** @type {Date} */
-  updatedAt = null
-  /** @type {Date} */
-  accessedAt
-  /** @type {string} */
-  mimeType = null
-  /** @type {number} */
-  size = null
-  isDirectory = false
-  /** @type {ArrayBuffer} */
-  thumbnailBuffer = null
-
-  constructor(filePath) {
-    const parsed = filePath?.match(/^(?<directory>\/.+)?\/(?<filename>.+(\..+)?)$/)
-    if (parsed?.groups) {
-      if (parsed.groups?.filename) this.name = parsed.groups?.filename
-    }
-    this.path = parsed?.groups?.directory || "/"
-  }
-
-  get fullPath() {
-    return `${this.path}/${this.name}`.replace(/\/+/, "/")
-  }
-
-  static fromStorage(params) {
-    const instance = new FileMeta()
-
-    if (!params || typeof params !== "object") return
-    Object.keys(params).forEach((param) => {
-      if (!(param in instance)) return
-      instance[param] = params[param]
-    })
-
-    return instance
-  }
-}
-
 class FileSystem {
   getIsCreated = async () => (await indexedDB.databases()).length
 
@@ -221,11 +219,26 @@ class FileSystem {
    * @param {string} path
    */
   async *getFilesInDirectory(path) {
-    const transaction = await getQueryBuilder().setStoreNames(META_STORAGE_NAME).createTransaction()
-    const store = transaction.objectStore(META_STORAGE_NAME).index("path")
-    /** @type {FileMeta[]} */
-    const files = new StorageIterator(store, IDBKeyRange.only(path))
-    for await (let file of files) yield FileMeta.fromStorage(file)
+    /**
+     * Hack for showing predefined applications in /applications directory
+     */
+    if (path === "/applications") {
+      let definedApplications = Object.entries(getDefinedApplications()).sort((a, b) => {
+        if (a[0].toLowerCase() < b[0].toLowerCase()) return -1
+        if (a[0].toLowerCase() > b[0].toLowerCase()) return 1
+        return 0
+      })
+
+      for (let [appName, { info }] of definedApplications) {
+        yield getFileMetaForApplication(appName, info)
+      }
+    } else {
+      const transaction = await getQueryBuilder().setStoreNames(META_STORAGE_NAME).createTransaction()
+      const store = transaction.objectStore(META_STORAGE_NAME).index("path-name")
+      /** @type {FileMeta[]} */
+      const files = new StorageIterator(store, IDBKeyRange.bound([path], [path, "ÿ"], true, true))
+      for await (let file of files) yield FileMeta.fromStorage(file)
+    }
   }
 
   /**
@@ -237,11 +250,21 @@ class FileSystem {
     directory = directory || "/"
 
     return new Promise(async (resolve, reject) => {
-      const transaction = await getQueryBuilder().setStoreNames(META_STORAGE_NAME).createTransaction()
-      const pathNameIndex = transaction.objectStore(META_STORAGE_NAME).index("path-name")
-      const request = pathNameIndex.get(IDBKeyRange.only([directory, filename]))
-      request.onsuccess = (e) => resolve(e.target.result)
-      request.onerror = (e) => reject(e)
+      /**
+       * Hack for showing predefined applications in /applications directory
+       */
+      if (/.*\.app$/.test(filename)) {
+        const definedApplications = getDefinedApplications()
+        if (filename in definedApplications) {
+          resolve(getFileMetaForApplication(filename))
+        }
+      } else {
+        const transaction = await getQueryBuilder().setStoreNames(META_STORAGE_NAME).createTransaction()
+        const pathNameIndex = transaction.objectStore(META_STORAGE_NAME).index("path-name")
+        const request = pathNameIndex.get(IDBKeyRange.only([directory, filename]))
+        request.onsuccess = (e) => resolve(FileMeta.fromStorage(e.target.result))
+        request.onerror = (e) => reject(e)
+      }
     })
   }
 
@@ -261,6 +284,8 @@ class FileSystem {
         const _request = metaStore.get(file.fileId)
         _request.onsuccess = () => metaStore.put(file)
       })
+
+    systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.FILE_UPDATED, file.fullPath)
     systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DIRECTORY_CHANGED, file.path)
   }
 
@@ -298,11 +323,6 @@ class FileSystem {
    * @param {UploadFileOnProgress} onProgress
    */
   async uploadFile(file, path, onProgress = () => {}) {
-    /**
-     * @todo delete this analog of `sleep` function
-     */
-    await new Promise((resolve) => setTimeout(() => resolve(), 500))
-
     if (!file?.name) {
       throw new Error("Failed to upload file. File is broken or has not filename.")
     }
@@ -333,7 +353,7 @@ class FileSystem {
       await getQueryBuilder()
         .setStoreNames([FILE_STORAGE_NAME, META_STORAGE_NAME])
         .doInTransaction("readwrite", async (transaction) => {
-          const fileContent = arrayBuffer
+          const fileContent = new File(arrayBuffer)
           const filesStore = transaction.objectStore(FILE_STORAGE_NAME)
           const metaStore = transaction.objectStore(META_STORAGE_NAME)
 
@@ -365,7 +385,7 @@ class FileSystem {
         const filesStore = transaction.objectStore(FILE_STORAGE_NAME)
         return await new Promise((resolve, reject) => {
           const request = filesStore.get(fileId)
-          request.onsuccess = () => resolve(new File(request.result))
+          request.onsuccess = () => resolve(File.fromStorage(request.result))
           request.onerror = () => reject(req.error)
         })
       })
@@ -422,7 +442,59 @@ class FileSystem {
         })
       })
 
+    systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.FILE_UPDATED, file.fullPath)
     systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DIRECTORY_CHANGED, file.path)
+  }
+
+  /**
+   * @param {string} path
+   * @param {ArrayBuffer} arrayBuffer
+   * @param {string} mimeType
+   */
+  async writeFileContent(path, arrayBuffer, mimeType = "text/plain") {
+    let meta = await this.getFileMeta(path)
+    /** @type {File} */
+    let file
+    if (!meta) {
+      meta = new FileMeta(path)
+      meta.mimeType = mimeType
+      meta.size = arrayBuffer.byteLength
+
+      file = new File(arrayBuffer)
+    } else {
+      file = await this.getFileContent(meta.fileId)
+      file.id = meta.fileId
+      file.arrayBuffer = arrayBuffer
+    }
+    meta.updatedAt = new Date()
+
+    await getQueryBuilder()
+      .setStoreNames([FILE_STORAGE_NAME, META_STORAGE_NAME])
+      .doInTransaction("readwrite", async (transaction) => {
+        const filesStore = transaction.objectStore(FILE_STORAGE_NAME)
+        const metaStore = transaction.objectStore(META_STORAGE_NAME)
+
+        if (!meta.fileId) {
+          /**
+           * Create new file content
+           */
+          meta.fileId = await new Promise((resolve, reject) => {
+            const request = filesStore.add(file)
+            request.onsuccess = () => resolve(request.result)
+            request.onerror = () => reject(request.error)
+          })
+          metaStore.add(meta)
+        } else {
+          /**
+           * Update file content
+           */
+          filesStore.put(file)
+          metaStore.put(meta)
+        }
+      })
+
+    systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.FILE_UPDATED, meta.fullPath)
+    systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DIRECTORY_CHANGED, meta.path)
   }
 }
 
@@ -440,8 +512,19 @@ systemBus
     response.file = await fileSystem.updateFileMeta(file)
     next()
   })
-  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_CONTENT, async (fileId, response, next) => {
+  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.GET_FILE_CONTENT_BY_ID, async (fileId, response, next) => {
     response.content = await fileSystem.getFileContent(fileId)
+    next()
+  })
+  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_CONTENT, async (filePath, response, next) => {
+    response.meta = await fileSystem.getFileMeta(filePath)
+    if (response?.meta?.fileId) {
+      response.content = await fileSystem.getFileContent(response.meta.fileId)
+    }
+    next()
+  })
+  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.WRITE_FILE_CONTENT, async ({ path, arrayBuffer, mimeType }, response, next) => {
+    response.content = await fileSystem.writeFileContent(path, arrayBuffer, mimeType)
     next()
   })
   .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.CREATE_FILE_STRUCTURE, async (_, response, next) => {

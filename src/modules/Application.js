@@ -35,6 +35,7 @@ class Application extends EventTarget {
     const _window = new className(params)
 
     const { window: windowWrapper } = await systemBus.execute(SYSTEM_BUS_COMMANDS.WINDOW_SYSTEM.OPEN_WINDOW, _window)
+    windowWrapper.setParams(params)
 
     _window.addEventListener(WindowEvents.CLOSED, () => {
       this._windows.delete(windowWrapper)

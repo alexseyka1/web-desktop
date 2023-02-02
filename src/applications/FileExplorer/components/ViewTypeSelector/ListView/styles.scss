@@ -1,0 +1,113 @@
+@import "../../../../../styles/variables.scss";
+
+.files-list {
+  &-table {
+    min-width: 100%;
+    font-size: 0.75rem;
+    border-collapse: collapse;
+    position: relative;
+
+    & > thead {
+      box-shadow: 0 1px 0 0 #c0c0c0;
+      background-color: #fff;
+      position: sticky;
+      top: 0;
+    }
+    & > thead th {
+      font-weight: 500;
+      color: transparentize(darken($primary, 40%), 0.5);
+    }
+
+    & tr th:not(:first-child) {
+      box-shadow: 1px 0 0 0 #c0c0c0 inset;
+    }
+
+    & > tbody td {
+      white-space: nowrap;
+      overflow: hidden;
+    }
+
+    tbody td {
+      padding: .25rem;
+    }
+  }
+
+  &-icon-column {
+    width: 1rem;
+    height: 1rem;
+    text-align: center;
+    overflow: hidden;
+    padding-right: 0 !important;
+    text-align: center;
+    vertical-align: middle;
+
+    img {
+      height: 100%;
+      width: 100%;
+    }
+
+    .defined-app-icon {
+      line-height: 1rem;
+      width: 1rem;
+      font-size: 0.75rem;
+    }
+  }
+
+  &-item {
+    &:focus {
+      outline: none;
+    }
+
+    &.active {
+      background: transparentize($primary, 0.8);
+      box-shadow: 0 0 0 1px $primary inset;
+    }
+
+    &__icon {
+      width: 100%;
+      aspect-ratio: 1;
+      line-height: 1rem;
+      overflow: hidden;
+      text-align: center;
+      font-size: 1rem;
+      color: $primary;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      .material-symbols-outlined {
+        font-size: 1rem;
+      }
+
+      & img {
+        width: auto;
+        height: auto;
+        max-width: 100%;
+        max-height: 100%;
+      }
+    }
+    &__title {
+      width: 100%;
+      max-height: 2rem;
+      overflow: hidden;
+      text-align: center;
+      font-size: 0.75rem;
+      text-overflow: ellipsis;
+      word-break: break-all;
+    }
+
+    &__directory {
+      & .files-list-item__icon {
+        .material-symbols-outlined {
+          font-variation-settings:
+          'FILL' 1,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 48;
+        }
+        
+        color: #e1ae63;
+      }
+    }
+  }
+}

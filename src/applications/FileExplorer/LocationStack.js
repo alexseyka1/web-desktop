@@ -24,6 +24,7 @@ class LocationStack extends EventTarget {
   }
 
   push(location) {
+    if (!location) return
     /**
      * Delete all forward history items and add new item
      */

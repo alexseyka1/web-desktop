@@ -59,11 +59,17 @@ export const addDropdownSubMenu = (item, appendTo, params = null) => {
   window.addEventListener("resize", () => updateMenuPosition())
 
   setTimeout(() => {
-    window.addEventListener("mousedown", (e) => {
-      if (!e.path.includes(_menuElem)) {
-        _menuElem.remove()
-      }
-    })
+    window.addEventListener(
+      "mousedown",
+      (e) => {
+        if (e?.path && !e.path.includes(_menuElem)) {
+          _menuElem.remove()
+        } else if (e?.target && !e.target?.closest(".dropdown-menu")) {
+          _menuElem.remove()
+        }
+      },
+      { once: true }
+    )
   })
 
   return _menuElem

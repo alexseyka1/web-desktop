@@ -1,0 +1,48 @@
+@import '../../../../../styles/variables.scss';
+
+.file-explorer__favorites-panel {
+  width: 150px;
+  border-right: 1px solid #c0c0c0;
+  background-color: #f4f4f4;
+  overflow-y: auto;
+  padding: .25rem;
+
+  // Favorite items
+  & > :not(hr) {
+    width: 100%;
+    font-size: 0.875rem;
+    padding: .125rem .25rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start;
+    align-items: center;
+    gap: 0.25rem;
+    border: none;
+    background: transparent;
+
+    &:hover, &:focus {
+      background-color: transparentize($primary, 0.8);
+      outline: none;
+    }
+
+    &:not(:last-child) {
+      border-bottom: 1px solid #ddd;
+    }
+
+    &.active {
+      background-color: $primary;
+      color: #fff;
+
+      & .material-symbols-outlined {
+        font-variation-settings:'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48
+      }
+    }
+  }
+
+  & > hr {
+    border: none;
+  }
+}

@@ -1,5 +1,6 @@
 import systemBus, { SYSTEM_BUS_COMMANDS } from "../SystemBus"
 import { FileMeta } from "../FileSystem"
+import arrayBufferCache from "../../classes/ArrayBufferCache"
 
 /**
  *
@@ -8,7 +9,7 @@ import { FileMeta } from "../FileSystem"
  */
 const generateImageThumbnail = (file) => {
   return new Promise(async (resolve) => {
-    const { content } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_CONTENT, file.fileId)
+    const { content } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.GET_FILE_CONTENT_BY_ID, file.fileId)
     const blob = new Blob([content.arrayBuffer], { type: file.mimeType })
 
     const img = await createImageBitmap(blob)
@@ -29,9 +30,9 @@ const commands = {
   "open-image": async (_id, filePath) => {
     try {
       const { file: fileMeta } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_META, filePath)
-      const { content: fileContent } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_CONTENT, fileMeta.fileId)
-      const _blob = new Blob([fileContent.arrayBuffer], { type: fileMeta.mimeType })
-      postMessage([_id, URL.createObjectURL(_blob), fileMeta])
+      const { content: fileContent } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.GET_FILE_CONTENT_BY_ID, fileMeta.fileId)
+      const url = arrayBufferCache.getFileUrl(fileContent.arrayBuffer, fileMeta.mimeType)
+      postMessage([_id, url, fileMeta])
     } catch (e) {
       throw new Error("Failed to open file: " + e.message)
     }

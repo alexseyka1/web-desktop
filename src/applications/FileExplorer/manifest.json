@@ -1,0 +1,6 @@
+{
+  "appName": "File explorer",
+  "description": "Look for the files you need and manipulate them",
+  "icon": "<span class=\"material-symbols-outlined\" style=\"color: #d38e28; font-variation-settings:'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48\">home_storage</span>",
+  "iconLarge": "<span class=\"material-symbols-outlined defined-app-icon\" style=\"background-color: #d38e28;\">home_storage</span>"
+}

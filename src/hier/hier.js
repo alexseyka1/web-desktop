@@ -1,12 +1,12 @@
-const isDev = () => typeof __DEV__ !== "undefined" && __DEV__ === false
-const isDebug = () => typeof __DEBUG__ !== "undefined" && __DEBUG__ === false
-const isProfiling = () => typeof __PROFILING__ !== "undefined" && __PROFILING__ === false
+const isDev = () => typeof __DEV__ !== "undefined" && __DEV__ === true
+const isDebug = () => typeof __DEBUG__ !== "undefined" && __DEBUG__ === true
+const isProfiling = () => typeof __PROFILING__ !== "undefined" && __PROFILING__ === true
 
 /**
  * Utility for setting function arguments required
  */
-function isRequired() {
-  throw new Error("Required function argument not specified.")
+function isRequired(suffix = "") {
+  throw new Error(`Required function argument not specified. ${suffix}`)
 }
 function objHasFunctions(obj) {
   if (typeof obj !== "object" || !Object.keys(obj).length) return false
@@ -42,7 +42,7 @@ const Hier = {
    * @param {string|object[]} children Text string or array of AST objects
    * @returns {HTMLElement|Text}
    */
-  createElement(tagName = isRequired(), attributes, children) {
+  createElement(tagName = isRequired(1), attributes, children) {
     attributes = Hier._clearAttributes(attributes)
     if (tagName === "textString") {
       return document.createTextNode(Util.decodeEntity(attributes.value.toString()))
@@ -103,7 +103,7 @@ const Hier = {
    * Deletes specified HTML node and all its children
    * @param {Node} node
    */
-  _deleteUnnecessaryNode(node = isRequired()) {
+  _deleteUnnecessaryNode(node = isRequired(2)) {
     if (node.hasChildNodes()) {
       node.childNodes.forEach((child) => Hier._deleteUnnecessaryNode(child))
     }
@@ -112,10 +112,18 @@ const Hier = {
 
   /**
    * Set HTML node attributes, specified by key-value object
-   * @param {Node} node
+   * @param {HTMLElement} node
    * @param {object} attributes
    */
-  _setNodeAttributes(node = isRequired(), attributes = isRequired()) {
+  _setNodeAttributes(node = isRequired(3), attributes = isRequired(4)) {
+    /**
+     * Remove unnecessary attributes
+     */
+    const attributesNames = Object.keys(attributes)
+    for (let attribute of node.attributes) {
+      if (!attributesNames.includes(attribute.name)) node.removeAttribute(attribute.name)
+    }
+
     if (!Object.keys(attributes).length) return
     const objectEntries = Object.entries(attributes || {})
     for (let [attribute, value] of objectEntries) {
@@ -124,22 +132,28 @@ const Hier = {
         continue
       }
 
-      if (typeof value !== "string" && typeof value !== "function") continue
+      if (!["string", "boolean", "function"].includes(typeof value)) continue
       if (attribute.startsWith("on")) node[attribute.toLowerCase()] = value
       else {
         if (attribute === "className") attribute = "class"
-        node.setAttribute(attribute, value)
+        if (typeof value === "boolean") {
+          if (value) node.setAttribute(attribute, "")
+          else node.removeAttribute(attribute)
+        } else {
+          node.setAttribute(attribute, value)
+          if (attribute === "value") node[attribute] = value
+        }
       }
     }
   },
 
   /**
-   * Dispatch `afterMount` event for specified component and all his children components
+   * Dispatch `internal:afterMount` event for specified component and all his children components
    * @param {BaseComponent} component
    */
-  _mountComponents(component = isRequired()) {
+  _mountComponents(component = isRequired(5)) {
     if (component instanceof BaseComponent && !component.isMounted) {
-      component.dispatchEvent(new Event("afterMount"))
+      component.dispatchEvent(new Event("internal:afterMount", { cancelable: true }))
       component.isMounted = true
     }
 
@@ -153,7 +167,7 @@ const Hier = {
    * @param {Node} node
    * @returns {Node|BaseComponent}
    */
-  _renderAstObject(object = isRequired(), node = isRequired(), rootNode) {
+  async _renderAstObject(object = isRequired(6), node = isRequired(7), rootNode) {
     if (Array.isArray(object) && object.length === 1) object = object.pop()
 
     if (typeof object !== "object") {
@@ -172,7 +186,7 @@ const Hier = {
         const clonedChildren = Util.cloneObject(object.children)
         const renderedChildren = new Array(clonedChildren.length)
         for (let childIndex in clonedChildren) {
-          renderedChildren[childIndex] = Hier._renderAstObject(clonedChildren[childIndex], object.node)
+          renderedChildren[childIndex] = await Hier._renderAstObject(clonedChildren[childIndex], object.node)
           Hier._mountComponents(renderedChildren[childIndex])
         }
         object.children = renderedChildren
@@ -184,7 +198,11 @@ const Hier = {
     } else {
       /** Current object is a component */
       const props = Object.assign({}, object.props, { children: object.children })
-      const nestedComponent = Hier.render(object instanceof BaseComponent ? object : object.tagName, node, props)
+      if (JSON.stringify(object) === JSON.stringify({})) {
+        console.error({ object, node, rootNode })
+        throw new Error("Unexpected empty object.")
+      }
+      const nestedComponent = await Hier.render(object instanceof BaseComponent ? object : object.tagName, node, props)
       if (rootNode) nestedComponent.dispatchEvent(new Event("afterCreate"))
 
       /** Free memory */
@@ -200,7 +218,7 @@ const Hier = {
    * @param {object} props properties to pass to created component
    * @returns {BaseComponent} rendered component object
    */
-  render(className = isRequired(), rootNode, props) {
+  async render(className = isRequired(8), rootNode, props) {
     const componentName = className instanceof BaseComponent ? className.constructor.name : className.name
     isDev() && console.group(`%c[Render][${componentName}]`, LogStyles.light)
     isProfiling() && console.time(`⏰ ${componentName} rendered in`)
@@ -212,14 +230,14 @@ const Hier = {
       if (rootNode) component.dispatchEvent(new Event("afterCreate"))
     }
 
-    let ast = component.render() ?? []
+    let ast = (await component.render()) ?? []
     if (!Array.isArray(ast)) ast = [ast]
 
     isDev() && console.debug(`%c[Rendered][${componentName}]`, LogStyles.success, component, ast)
 
     const renderedChildren = new Array(ast.length)
     for (let childIndex in ast) {
-      renderedChildren[childIndex] = Hier._renderAstObject(ast[childIndex], component.node, rootNode)
+      renderedChildren[childIndex] = await Hier._renderAstObject(ast[childIndex], component.node, rootNode)
     }
     component.children = renderedChildren
 
@@ -240,14 +258,14 @@ const Hier = {
    * Re-renders specified component. Updates only changed parts of component content
    * @param {BaseComponent} component
    */
-  rerenderComponent(component = isRequired()) {
+  async rerenderComponent(component = isRequired(9)) {
     /**
      * Component content reconcillation process. Finds out changed parts and renders it to DOM
      * @param {BaseComponent|object} innerComponent Hier component or common tag AST object
      * @param {BaseComponent[]|object[]} currentChildren
      * @param {BaseComponent[]|object[]} newChildren
      */
-    const compareChildrenElements = (innerComponent = isRequired(), currentChildren, newChildren) => {
+    const compareChildrenElements = (innerComponent = isRequired(10), currentChildren, newChildren) => {
       isDev() && console.debug("%c[Re-render triggered]", LogStyles.success, innerComponent, Util.cloneObject(currentChildren), Util.cloneObject(newChildren))
       if (typeof innerComponent.children === "undefined") innerComponent.children = []
       if (typeof currentChildren === "undefined") currentChildren = []
@@ -412,14 +430,14 @@ const Hier = {
       }
     }
 
-    let ast = component.render() ?? []
+    let ast = (await component.render()) ?? []
     if (!Array.isArray(ast)) ast = [ast]
 
     const _currentChildren = component.children || []
     const tempNode = Hier.createElement("template")
     const _newChildren = new Array(ast.length)
     for (let childIndex in ast) {
-      _newChildren[childIndex] = Hier._renderAstObject(ast[childIndex], tempNode)
+      _newChildren[childIndex] = await Hier._renderAstObject(ast[childIndex], tempNode)
     }
 
     compareChildrenElements(component, _currentChildren, _newChildren)
@@ -439,7 +457,7 @@ const Util = {
    * @param {any} obj
    * @returns {string}
    */
-  jsonSerialize: function (obj = isRequired(), prettyPrint) {
+  jsonSerialize: function (obj = isRequired(11), prettyPrint) {
     return JSON.stringify(
       obj,
       (key, value) => {
@@ -453,7 +471,7 @@ const Util = {
     )
   },
   /**
-   * Depp clone any object
+   * Deep clone any object
    * @param {object} obj
    * @returns {object}
    */
@@ -468,8 +486,22 @@ const Util = {
       newObj = obj.cloneNode()
     } else if (obj instanceof HierRef) {
       newObj = obj
+    } else if (!obj) {
+      return null
     } else {
-      newObj = Object.assign({}, obj || {})
+      if (obj?.constructor?.name.toLowerCase() === "date") {
+        newObj = new Date(obj.toUTCString())
+      } else if (obj?.constructor && ["set", "weakset", "map", "weakmap"].includes(obj?.constructor?.name.toLowerCase())) {
+        if (obj instanceof Set) newObj = new Set(obj)
+        if (obj instanceof WeakSet) newObj = new WeakSet(obj)
+        if (obj instanceof Map) newObj = new Map(obj)
+        if (obj instanceof WeakMap) newObj = new WeakMap(obj)
+      } else if (obj?.constructor && !["object", "array"].includes(obj?.constructor?.name.toLowerCase())) {
+        /** Dont clone class instances */
+        newObj = obj
+      } else {
+        newObj = Object.assign({}, obj || {})
+      }
     }
 
     const objectEntries = Object.entries(newObj)
@@ -490,7 +522,7 @@ const Util = {
    * @param {Function} callable
    * @returns {boolean}
    */
-  getIsClass: function (callable = isRequired()) {
+  getIsClass: function (callable = isRequired(12)) {
     if (typeof callable !== "function") return false
     return /^class *\w+.*{/.test(callable)
   },
@@ -501,7 +533,7 @@ const Util = {
    * @throws {TypeError}
    * @returns {object} Element attributes
    */
-  getElementAttributes: function (element = isRequired()) {
+  getElementAttributes: function (element = isRequired(13)) {
     if (!(element instanceof HTMLElement)) throw new TypeError("Invalid object specified.")
     const attributes = element.attributes
     if (!attributes || !attributes.length) return {}
@@ -530,11 +562,15 @@ const Util = {
 
 /**
  * Hier components
+ * @class
+ * @property {object} props
+ * @property {HTMLElement} node
  */
 class BaseComponent extends EventTarget {
   _props = {}
   props = {}
   children = []
+  /** @type {HTMLElement} */
   node = null
   isMounted = false
 
@@ -556,14 +592,14 @@ class BaseComponent extends EventTarget {
       get: () => {
         return this._props || {}
       },
-      set: (currentValue) => {
+      set: async (currentValue) => {
         currentValue = Hier._clearProps(currentValue)
         const prevProps = Util.cloneObject(this._props)
         if (Util.jsonSerialize(prevProps) != Util.jsonSerialize(currentValue)) {
           this._props = currentValue
 
           isProfiling() && console.time(`⏰ ${this.constructor.name} re-rendered in`)
-          Hier.rerenderComponent(this)
+          await Hier.rerenderComponent(this)
           isProfiling() && console.timeEnd(`⏰ ${this.constructor.name} re-rendered in`)
 
           this.dispatchEvent(new CustomEvent("afterUpdate", { detail: { props: currentValue, prevProps } }))
@@ -576,9 +612,13 @@ class BaseComponent extends EventTarget {
       isDebug() && console.debug(`⭐️ %c[Created] [${this.constructor.name}]`, LogStyles.light)
       if (typeof this.afterCreate === "function") this.afterCreate.call(this)
     })
-    this.addEventListener("afterMount", () => {
-      isDebug() && console.debug(`✅ %c[Mounted] [${this.constructor.name}]`, LogStyles.light)
-      if (typeof this.afterMount === "function") this.afterMount.call(this)
+    this.addEventListener("internal:afterMount", (e) => {
+      requestAnimationFrame(() => {
+        if (!this.node.closest("body")) return
+        isDebug() && console.debug(`✅ %c[Mounted] [${this.constructor.name}]`, LogStyles.light)
+        if (typeof this.afterMount === "function") this.afterMount.call(this)
+        this.dispatchEvent(new Event("afterMount"))
+      })
     })
     this.addEventListener("afterUpdate", (event) => {
       const { props, prevProps, state, prevState } = event.detail
@@ -627,6 +667,10 @@ class BaseComponent extends EventTarget {
   }
 }
 
+/**
+ * @class
+ * @property {object} state
+ */
 class Component extends BaseComponent {
   _state = {}
 
@@ -640,13 +684,13 @@ class Component extends BaseComponent {
       get: () => {
         return this._state || {}
       },
-      set: (currentValue) => {
+      set: async (currentValue) => {
         const prevState = Util.cloneObject(this._state)
         if (Util.jsonSerialize(prevState) != Util.jsonSerialize(currentValue)) {
           this._state = currentValue
 
           isProfiling() && console.time(`⏰ ${this.constructor.name} re-rendered in`)
-          Hier.rerenderComponent(this)
+          await Hier.rerenderComponent(this)
           isProfiling() && console.timeEnd(`⏰ ${this.constructor.name} re-rendered in`)
 
           this.dispatchEvent(
@@ -666,13 +710,13 @@ class Component extends BaseComponent {
   /**
    * @param {object} partialState
    */
-  setState(partialState) {
+  async setState(partialState) {
     const prevState = this.state
     this.state = Object.assign({}, prevState || {}, partialState)
   }
 }
 
-class HierRef {
+export class HierRef {
   elem
   setElem(elem) {
     this.elem = elem

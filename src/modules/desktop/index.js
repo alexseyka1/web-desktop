@@ -1,40 +1,7 @@
-import Window from "../Window"
-import RandomColor from "../../applications/RandomColor"
-import Notepad from "../../applications/Notepad"
 import WindowSystem from "../WindowSystem"
 import "../../styles/desktop.scss"
-import "../../styles/files-grid.scss"
 
-const APPLICATIONS = [
-  {
-    icon: "📘",
-    title: "Notepad",
-    run() {
-      return new Notepad({ x: 250, y: 200, width: 350, height: 350 })
-    },
-  },
-  {
-    icon: "🌈",
-    title: "Random color Random color Random color Random color Random color Random color",
-    run() {
-      return new RandomColor({ x: 200, y: 150, width: 350, height: 200 })
-    },
-  },
-  {
-    icon: "1️⃣",
-    title: "Test window 1",
-    run() {
-      return new Window({ x: 100, y: 50, width: 200, height: 200, title: "First window" })
-    },
-  },
-  {
-    icon: "2️⃣",
-    title: "Test window 2",
-    run() {
-      return new Window({ x: 150, y: 100, width: 200, height: 200, title: "Second window" })
-    },
-  },
-]
+const APPLICATIONS = []
 
 class Desktop extends EventTarget {
   /** @type {WindowSystem} */

@@ -1,18 +1,7 @@
+import { getDefinedApplications } from "../classes/ApplicationFinder"
 import Application, { APPLICATION_EVENTS } from "./Application"
-import { camelToKebabCase } from "./Helper"
-import systemBus, { SYSTEM_BUS_COMMANDS, SYSTEM_BUS_EVENTS } from "./SystemBus"
-
-export const getDefinedApplications = () => {
-  const requireAll = (r) =>
-    r
-      .keys()
-      .map(r)
-      .map((item) => item.default)
-  const result = requireAll(require.context("../applications/", true, /\.\/.*\/index\.js$/))
-  return result.reduce((response, item) => {
-    return { ...response, [camelToKebabCase(item.name) + ".app"]: item }
-  }, {})
-}
+import { getFileNameFromPath } from "./FileSystem"
+import systemBus, { SYSTEM_BUS_COMMANDS } from "./SystemBus"
 
 const COMMANDS = {
   "test-text": ([times = 1]) => {
@@ -186,30 +175,43 @@ class AppRunner {
 const appRunner = new AppRunner()
 
 const runWithDefinedCommands = async ([command, definedCommands], response, next) => {
-  const [, appName, inputString] = command.match(/^([^\s]+)\s?(.*)?/)
+  const [, commandName, inputString] = command.match(/^([^\s]+)\s?(.*)?/)
 
-  if (appName === "all-commands") {
+  if (commandName === "all-commands") {
     response.exitCode = await appRunner.run(async () => {
       return `\nAll commands available:\n - ${Object.keys({ ...COMMANDS, ...definedCommands }).join("\n - ")}`
     })
     next()
-  } else if (appName in definedCommands) {
-    response.exitCode = await appRunner.run(definedCommands[appName], inputString)
+  } else if (commandName in definedCommands) {
+    response.exitCode = await appRunner.run(definedCommands[commandName], inputString)
     next()
-  } else if (appName in COMMANDS) {
-    response.exitCode = await appRunner.run(COMMANDS[appName], inputString)
+  } else if (commandName in COMMANDS) {
+    response.exitCode = await appRunner.run(COMMANDS[commandName], inputString)
+    next()
+  } else if (/^\/applications\/.*\.app$/.test(commandName)) {
+    const appName = getFileNameFromPath(commandName)
+    const definedApplications = getDefinedApplications()
+    if (!(appName in definedApplications)) {
+      appRunner.onError(`Unknown command "${appName}"\n`)
+    } else {
+      const requiredApplication = definedApplications[appName].module
+      response.exitCode = await appRunner.run(requiredApplication, inputString)
+    }
     next()
   } else {
-    // @todo Try to find application file
-    appRunner.onError(`Unknown command "${appName}"\n`)
+    appRunner.onError(`Unknown command "${commandName}"\n`)
     next()
   }
 }
 
 systemBus
-  .addMiddleware(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN, async (command, response, next) => {
+  .addMiddleware(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_COMMAND, async (command, response, next) => {
     await runWithDefinedCommands([command, {}], response, next)
   })
-  .addMiddleware(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_WITH_DEFINED_COMMANDS, runWithDefinedCommands)
+  .addMiddleware(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_COMMAND_WITH_DEFINED_COMMANDS, runWithDefinedCommands)
+  .addMiddleware(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_APPLICATION, async (application, response, next) => {
+    response.exitCode = await appRunner.run(application)
+    next()
+  })
 
 export default appRunner

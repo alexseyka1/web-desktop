@@ -19,10 +19,6 @@ class WindowSystem {
     this.#attachSystemBus()
   }
 
-  get isAlreadyRan() {
-    return this.root.children.length
-  }
-
   focusOnWindow(window) {
     if (this.windowInFocus) {
       if (this.windowInFocus === window) return
@@ -60,15 +56,21 @@ class WindowSystem {
         _window.isMaximized = true
       }
 
+      if (this.windows.length) {
+        const lastWindow = this.windows[this.windows.length - 1]
+        if (_window.params.y <= lastWindow.position.y) {
+          _window.params.x = lastWindow.position.x + 25
+          _window.params.y = lastWindow.position.y + 25
+        }
+      }
+
       const wrapper = createWindowWrapper(_window)
       this.windows.push(wrapper)
       this.#attachWindowEvents(wrapper)
 
       this.focusOnWindow(wrapper)
       wrapper.domElement.addEventListener("mousedown", () => this.focusOnWindow(wrapper))
-      if (this.isAlreadyRan) {
-        this.#appendAndRunWindow(wrapper)
-      }
+      this.#appendAndRunWindow(wrapper)
 
       return wrapper
     }
@@ -91,6 +93,8 @@ class WindowSystem {
       this.windows = this.windows.filter((item) => item !== _window)
       systemBus.dispatchEvent(SYSTEM_BUS_EVENTS.WINDOW_SYSTEM.STACK_CHANGED)
       _window.removeEventListener(WindowEvents.CLOSED, closeHandler)
+
+      if (this.windows.length) this.focusOnWindow(this.windows[this.windows.length - 1])
     }
 
     _window.addEventListener(WindowEvents.CLOSED, closeHandler)

@@ -67,6 +67,7 @@ const getPositioningMixin = () => ({
   resizeWindow(x, y) {
     if (x) this.domElement.style.width = `${x}px`
     if (y) this.domElement.style.height = `${y}px`
+    this._window.dispatchEvent(new Event(WindowEvents.RESIZED))
   },
 })
 

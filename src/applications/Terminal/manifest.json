@@ -1,0 +1,6 @@
+{
+  "appName": "Terminal",
+  "description": "Command line terminal",
+  "icon": "<span class=\"material-symbols-outlined\" style=\"color: #585f65; font-variation-settings:'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48\">terminal</span>",
+  "iconLarge": "<span class=\"material-symbols-outlined defined-app-icon\" style=\"background-color: #585f65;\">terminal</span>"
+}
