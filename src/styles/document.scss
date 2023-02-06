@@ -1,8 +1,44 @@
+@import "./variables.scss";
+
+:root {
+  --primary: $primary;
+  --success: $success;
+  --danger: $danger;
+  --warning: $warning;
+  --info: $info;
+}
+
 @font-face {
   font-family: "Material Symbols Outlined";
   font-style: normal;
   font-weight: 100 700;
   src: url(../../public/fonts/material-symbols.woff2) format("woff2");
+}
+
+.text-black {
+  color: black !important;
+}
+.text-primary {
+  color: $primary;
+}
+.text-success {
+  color: $success;
+}
+.text-danger {
+  color: $danger;
+}
+.text-warning {
+  color: $warning;
+}
+.text-info {
+  color: $info;
+}
+.text-muted {
+  color: transparentize(#000000, 0.8)
+}
+
+.text-bold {
+  font-weight: bold !important;
 }
 
 .material-symbols-outlined {

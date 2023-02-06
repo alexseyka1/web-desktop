@@ -14,8 +14,14 @@
       top: 0;
     }
     & > thead th {
-      font-weight: 500;
+      font-weight: normal;
       color: transparentize(darken($primary, 40%), 0.5);
+      padding: .125rem;
+
+      &.active {
+        font-weight: 500;
+        color: darken($primary, 40%);
+      }
     }
 
     & tr th:not(:first-child) {
@@ -29,6 +35,10 @@
 
     tbody td {
       padding: .25rem;
+    }
+
+    tbody tr:nth-child(2n) td {
+      background-color: #f4f4f4;
     }
   }
 

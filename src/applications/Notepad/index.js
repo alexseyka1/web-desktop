@@ -33,7 +33,7 @@ class Notepad extends Application {
     })
     this._window.registerMenuPanel(this.menuPanel(this._window))
     this._window.domElement.classList.add("notepad")
-    this._window.contentElement.innerHTML = `<textarea class="notepad__text-content" autofocus></textarea>`
+    this._window.contentElement.innerHTML = `<textarea class="notepad__text-content"></textarea>`
     this.windowMessages = new WindowMessages(this)
 
     this.textContentElement.addEventListener("input", (e) => (this.#state.isFileSaved = false))
@@ -54,6 +54,7 @@ class Notepad extends Application {
 
     this.#initState()
     if (args && args.length) this.#openFile(args.pop())
+    requestAnimationFrame(() => this.textContentElement.focus())
   }
 
   #initState() {

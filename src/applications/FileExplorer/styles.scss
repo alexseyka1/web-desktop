@@ -11,6 +11,13 @@
     overflow: hidden;
   }
 
+  &__right-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    overflow: hidden;
+  }
+
   &__directory-content {
     flex: 1;
     overflow-y: auto;

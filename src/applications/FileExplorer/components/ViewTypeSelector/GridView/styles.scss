@@ -1,3 +1,5 @@
+@import "../../../../../styles/variables.scss";
+
 .files-grid {
   display: flex;
   flex-direction: row;
@@ -28,8 +30,8 @@
     }
 
     &.active {
-      background: rgba(33, 150, 243, 0.5);
-      box-shadow: 0 0 0 1px #2196f3 inset;
+      background: transparentize($primary, 0.8);
+      box-shadow: 0 0 0 1px $primary inset;
     }
 
     &__icon {
@@ -46,6 +48,10 @@
 
       .material-symbols-outlined {
         font-size: 54px;
+      }
+
+      .defined-app-icon {
+        font-size: 42px;
       }
 
       & img {

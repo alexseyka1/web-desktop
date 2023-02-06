@@ -22,6 +22,25 @@
 - [x] Add method for writing file content
   - [x] Add feature to Notepad for open/save file's content
 - [x] Add grid/list view toggle to FileExplorer
+
+- [ ] Move terminal command line editing functionality to a separate class Readline. This class must:
+  - [ ] have store:
+    - [ ] current typed string
+    - [ ] current displaying string
+    - [ ] current cursor position
+    - [ ] strings history
+    - [ ] current history position
+  - [ ] have method for executing commands:
+    - [ ] adding character to current typed string
+    - [ ] removing character from current typed string
+    - [ ] moving cursor forward, backward, to start and end the typed string
+    - [ ] navigate through history and substitute historical value to current displaying string
+  - [ ] have method to add text string to his history
+  - [ ] have method for returning current displaying string
+- [ ] All console applications must use Readline for input strings
+- [ ] Move all the command line functionality to separate application Shell (Terminal app must be stupid simple: run Shell on startup and close when Shell terminating)
+- [ ] Add context for callable applications. This context should include global context like PATH variable and custom needed context
+
 - [ ] Add posibility to select files by mouse
 - [ ] Add posibility to set wallpaper for folders
 - [ ] Add posibility to hide window header at all

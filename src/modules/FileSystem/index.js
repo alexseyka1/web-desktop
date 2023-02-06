@@ -181,9 +181,8 @@ const createInitialFileStructure = async (files, parent = null) => {
     const filepath = `${parentPath}/${filename}`.replace("//", "/")
 
     const metaInfo = new FileMeta(filepath)
-    metaInfo.size = Math.floor(Math.random() * 1024 * 1024 * 100) * 1024 // from 1Kb to 100Mb
 
-    let fileContent = new File(new TextEncoder().encode(filepath).buffer)
+    let fileContent = new File()
     if (!("mimeType" in file)) {
       metaInfo.isDirectory = true
       if (Object.keys(file).length) await createInitialFileStructure(file, metaInfo)
@@ -191,7 +190,10 @@ const createInitialFileStructure = async (files, parent = null) => {
       if ("content" in file) {
         fileContent = new File(file.content)
         delete file.content
+      } else {
+        fileContent = new File(new TextEncoder().encode(filepath).buffer)
       }
+      metaInfo.size = fileContent.arrayBuffer.byteLength
       Object.assign(metaInfo, file)
     }
 
@@ -239,6 +241,43 @@ class FileSystem {
       const files = new StorageIterator(store, IDBKeyRange.bound([path], [path, "ÿ"], true, true))
       for await (let file of files) yield FileMeta.fromStorage(file)
     }
+  }
+
+  async *getSortedFilesInDirectory(path, sort) {
+    let files = []
+    for await (let file of this.getFilesInDirectory(path)) files.push(file)
+
+    if (sort) {
+      if (!Array.isArray(sort)) sort = [sort]
+      files = files.sort((a, b) => {
+        let result = null
+
+        sort.forEach((attr) => {
+          if (typeof attr !== "string") return
+          let isDesc = false
+          if (attr.substring(0, 1) === "-") {
+            isDesc = true
+            attr = attr.substring(1)
+          }
+
+          let aParam = a[attr],
+            bParam = b[attr],
+            _res
+          if (typeof aParam === "string" || typeof bParam === "string") {
+            aParam = (aParam + "").toLowerCase()
+            bParam = (bParam + "").toLowerCase()
+            _res = isDesc ? bParam.localeCompare(aParam) : aParam.localeCompare(bParam)
+          } else {
+            _res = isDesc ? aParam - bParam : bParam - aParam
+          }
+
+          result = result || _res
+        })
+
+        return result
+      })
+    }
+    for (let file of files) yield file
   }
 
   /**
@@ -538,6 +577,10 @@ systemBus
   })
   .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.GET_FILES_ITERATOR, (dirPath, response, next) => {
     response.iterator = fileSystem.getFilesInDirectory(dirPath)
+    next()
+  })
+  .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.GET_SORTED_FILES_IN_DIRECTORY, ({ path, sort }, response, next) => {
+    response.iterator = fileSystem.getSortedFilesInDirectory(path, sort)
     next()
   })
   .addMiddleware(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.UPLOAD_FILES_LIST, async ({ files, path }, _, next) => {

@@ -14,6 +14,7 @@ export const SYSTEM_BUS_COMMANDS = {
     CREATE_FILE_STRUCTURE: "file-system:create-file-structure",
     IS_STRUCTURE_EXISTS: "file-system:is-structure-exists",
     GET_FILES_ITERATOR: "file-system:get-files-iterator",
+    GET_SORTED_FILES_IN_DIRECTORY: "file-system:get-sorted-files-in-directory",
     UPLOAD_FILES_LIST: "file-system:upload-files-list",
     DELETE_FILES_LIST: "file-system:delete-files-list",
   },

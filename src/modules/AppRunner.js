@@ -209,8 +209,8 @@ systemBus
     await runWithDefinedCommands([command, {}], response, next)
   })
   .addMiddleware(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_COMMAND_WITH_DEFINED_COMMANDS, runWithDefinedCommands)
-  .addMiddleware(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_APPLICATION, async (application, response, next) => {
-    response.exitCode = await appRunner.run(application)
+  .addMiddleware(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_APPLICATION, async ({ app, input }, response, next) => {
+    response.exitCode = await appRunner.run(app, input)
     next()
   })
 

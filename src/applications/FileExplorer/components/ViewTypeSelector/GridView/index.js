@@ -17,7 +17,7 @@ class GridView extends Hier.BaseComponent {
 
     return h`
       ${files.map((file, index) => {
-        let _className = "files-grid-item"
+        let _className = "files-grid-item files-item"
         if (selectedIds.includes(file.fileId)) _className += " active"
         if (file.isDirectory) _className += " files-grid-item__directory"
         let fileName = file.displayName || file.name || ""

@@ -98,15 +98,15 @@ class WindowMessage extends Window {
 
       if (!this.icon) {
         if (messageType === WINDOW_MESSAGE_TYPES.SUCCESS) {
-          this.icon = "✅"
+          this.icon = `<span class="text-success material-symbols-outlined">check_circle</span>`
         } else if (messageType === WINDOW_MESSAGE_TYPES.INFO) {
-          this.icon = "ℹ️"
+          this.icon = `<span class="text-info material-symbols-outlined">info</span>`
         } else if (messageType === WINDOW_MESSAGE_TYPES.WARNING) {
-          this.icon = "⚠️"
+          this.icon = `<span class="text-warning material-symbols-outlined">warning</span>`
         } else if (messageType === WINDOW_MESSAGE_TYPES.ERROR) {
-          this.icon = "🚫"
+          this.icon = `<span class="text-danger material-symbols-outlined">block</span>`
         } else if (messageType === WINDOW_MESSAGE_TYPES.QUESTION) {
-          this.icon = "❓"
+          this.icon = `<span class="text-danger material-symbols-outlined">help</span>`
         }
       }
     }

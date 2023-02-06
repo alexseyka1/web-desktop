@@ -9,11 +9,8 @@
  * @returns {HTMLElement} Menu element
  */
 export const addDropdownSubMenu = (item, appendTo, params = null) => {
-  const _existingMenu = appendTo.querySelector(".dropdown-menu")
-  if (_existingMenu) {
-    if (appendTo === document.body) _existingMenu.remove()
-    else return
-  }
+  const _existingMenu = document.querySelector(".dropdown-menu")
+  if (_existingMenu) _existingMenu.remove()
 
   const _menuElem = createDropdownMenu(item)
   let verticalOffset = 0,
@@ -182,7 +179,7 @@ export const getRegisterMenuObject = (menuElement) => {
         /**
          * Adding dropdown menu to main menu panel
          */
-        panelMenuItemElement.addEventListener("click", () => {
+        panelMenuItemElement.addEventListener("mousedown", () => {
           addDropdownSubMenu(panelMenuItem, menuElement, { element: panelMenuItemElement })
         })
       }

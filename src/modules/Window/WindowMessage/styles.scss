@@ -42,10 +42,13 @@
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    font-size: 3rem;
-    line-height: 3rem;
     background-color: #f4f4f4;
     user-select: none;
+
+    &, * {
+      font-size: 3rem;
+      line-height: 3rem;
+    }
   }
   &__message {
     flex: 3;

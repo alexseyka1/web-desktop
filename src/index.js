@@ -117,14 +117,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   /**
    * MOVE THIS FUNCIONALITY TO SEPARATE CLASS (SOME APPLICATION RUNNER)
    */
-  // const app = new Terminal()
-  // app.main(["/applications"])
+  const definedApplications = getDefinedApplications()
+  systemBus.execute(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_APPLICATION, { app: definedApplications["terminal.app"].module, input: "/applications" })
+  // systemBus.execute(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_APPLICATION, { app: definedApplications["image-viewer.app"].module })
 
-  const app = new FileExplorer()
-  app.main(["/applications"])
-
-  // new ImageViewer().main()
-
-  // const notepad = new Notepad()
-  // notepad.main(["/home/documents/hello.txt"])
+  // systemBus.execute(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_APPLICATION, { app: definedApplications["file-explorer.app"].module, input: "/home/documents" })
+  // systemBus.execute(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_APPLICATION, { app: definedApplications["notepad.app"].module, input: "/home/documents/hello.txt" })
 })

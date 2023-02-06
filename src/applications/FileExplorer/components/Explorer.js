@@ -24,26 +24,26 @@ class Explorer extends Hier.Component {
   #showedFileIds = new Map()
   /** @type {Set<FileMeta>} */
   #selectedFiles = new Set()
+  #itemsInRow = 1
   /** @type {HierRef} */
   #directoryContentRef
-  #itemsInRow = 1
 
   constructor(props) {
     super(props)
-    this.#directoryContentRef = Hier.createRef()
+    this.#directoryContentRef = new HierRef()
     this.clearSelectedFiles()
 
     this.#locationStack = new LocationStack(props.path || "/home")
     this.#locationStack.addEventListener("change", () => {
-      this.setState({ path: this.#locationStack.current })
+      this.setState({ timestamp: Date.now() })
     })
 
     this._state = {
       timestamp: Date.now(),
-      path: this.#locationStack.current,
       isShowUploadDropZone: false,
       favorites: [],
-      viewType: VIEW_TYPE_GRID,
+      viewType: VIEW_TYPE_LIST,
+      sort: "name",
     }
 
     systemBus.addEventListener(SYSTEM_BUS_EVENTS.FILE_SYSTEM.DIRECTORY_CHANGED, (e) => {
@@ -99,9 +99,7 @@ class Explorer extends Hier.Component {
   }
 
   afterMount() {
-    const { path } = this.state
-
-    this.node.addEventListener("mousedown", () => {
+    this.#directoryContentRef.elem?.addEventListener("mousedown", () => {
       this.clearSelectedFiles()
       this.#forceUpdate()
     })
@@ -154,13 +152,8 @@ class Explorer extends Hier.Component {
 
   checkItemsInRow() {
     let itemsInRow = 1,
-      elem
-    if (this.state.viewType == VIEW_TYPE_LIST) {
-      this.#itemsInRow = 1
-      return
-    }
+      elem = this.node.querySelector(`.files-items .files-item`)
 
-    if (this.state.viewType == VIEW_TYPE_GRID) elem = this.node.querySelector(`.files-grid .files-grid-item`)
     if (elem) {
       const top = elem.getBoundingClientRect().top
       while ((elem = elem.nextElementSibling)) {
@@ -218,7 +211,7 @@ class Explorer extends Hier.Component {
       const newFileCursor = this.#showedFiles.get(_currentIndex)
       this.#selectedFiles.add(newFileCursor)
       requestAnimationFrame(() => {
-        const elem = this.node.querySelector(`.files-grid .files-grid-item:nth-child(${_currentIndex})`)
+        const elem = this.node.querySelector(`.files-items .files-item:nth-child(${_currentIndex})`)
         elem?.scrollIntoView({ behavior: "smooth", block: "start", inline: "start" })
       })
     }
@@ -234,6 +227,7 @@ class Explorer extends Hier.Component {
       this.clearSelectedFiles()
       this.#forceUpdate()
     } else if (e.key.toLowerCase() === "a" && e.metaKey) {
+      e.preventDefault()
       /**
        * On select all files
        */
@@ -268,16 +262,19 @@ class Explorer extends Hier.Component {
 
   async #renderStatusBar() {
     const { viewType } = this.state
-    const { quota, usage } = await navigator.storage.estimate()
+    const {
+      quota,
+      usageDetails: { indexedDB },
+    } = await navigator.storage.estimate()
     const _selectedCount = this.#selectedFiles.size
     const _showedCount = this.#showedFiles.size
     const _selectedText = _selectedCount ? `Selected ${_selectedCount} file${_selectedCount > 1 ? "s" : ""}` : ""
-    const _totalText = _showedCount ? `${_showedCount} file${_showedCount > 1 ? "s" : ""}` : "Empty directory"
+    const _totalText = _showedCount ? `${_showedCount} file${_showedCount > 1 ? "s" : ""}` : null
 
     return h`
       <div>${_selectedCount ? _selectedText : _totalText}</div>
       <div style="display: flex">
-        Used ${bytesToReadable(usage)}&nbsp;of ${bytesToReadable(quota)}
+        ${bytesToReadable(indexedDB)}&nbsp;/ ${bytesToReadable(quota)}
         <${ViewTypeSelector} type=${viewType}
           onChange=${(_type) => this.setState({ viewType: _type })}
         />
@@ -290,13 +287,13 @@ class Explorer extends Hier.Component {
     const elem = this.#directoryContentRef?.elem
     if (!elem) return
 
-    const isDragHasFiles = (event) => {
-      if (event.dataTransfer.items) {
-        for (let item of event.dataTransfer.items) {
+    const isDragHasFiles = (e) => {
+      if (e.dataTransfer.items) {
+        for (let item of e.dataTransfer.items) {
           if (item.kind === "file") return true
         }
       } else {
-        for (let item of event.dataTransfer.files) {
+        for (let item of e.dataTransfer.files) {
           if (item) return true
         }
       }
@@ -380,7 +377,8 @@ class Explorer extends Hier.Component {
 
   async #renderDirectoryContent() {
     const { windowMessages } = this.props
-    const { path, viewType } = this.state
+    const { viewType, sort } = this.state
+    const path = this.#locationStack.current
 
     /**
      * If location was changed
@@ -411,7 +409,7 @@ class Explorer extends Hier.Component {
     this.#showedFileIds.clear()
     const filesList = []
     let index = 0
-    const { iterator } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.GET_FILES_ITERATOR, path)
+    const { iterator } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.GET_SORTED_FILES_IN_DIRECTORY, { path, sort })
     for await (let file of iterator) {
       this.#showedFiles.set(index, file)
       this.#showedFileIds.set(file.fileId, index)
@@ -499,7 +497,7 @@ class Explorer extends Hier.Component {
       e.preventDefault()
       e.stopPropagation()
       const contextMenu = this.#getFileContextMenu(file)
-      addDropdownSubMenu(contextMenu, document.body, { x: e.clientX, y: e.clientY })
+      addDropdownSubMenu(contextMenu, e.target, { x: e.clientX, y: e.clientY })
     }
     const onFocus = (e, file) => {
       this.node.closest(".window").dispatchEvent(new Event("mousedown"))
@@ -509,18 +507,20 @@ class Explorer extends Hier.Component {
       }
     }
     const onBlur = (e, file) => {}
+    const onChangeSort = (sort) => this.setState({ sort })
 
     const attrs = {
-      ref: this.#directoryContentRef,
-      className: (viewType === VIEW_TYPE_GRID ? "files-grid" : "files-list") + " file-explorer__directory-content",
+      className: (viewType === VIEW_TYPE_GRID ? "files-grid" : "files-list") + " files-items",
       files: filesList,
       selectedIds: this.selectedFileIds,
-      onMouseDown,
-      onDblClick,
-      onTouchStart,
-      onContextMenu,
-      onFocus,
-      onBlur,
+      ":sort": sort,
+      ":onMouseDown": onMouseDown,
+      ":onDblClick": onDblClick,
+      ":onTouchStart": onTouchStart,
+      ":onContextMenu": onContextMenu,
+      ":onFocus": onFocus,
+      ":onBlur": onBlur,
+      ":onChangeSort": onChangeSort,
     }
     if (viewType === VIEW_TYPE_GRID) {
       return h`
@@ -543,14 +543,17 @@ class Explorer extends Hier.Component {
       />
       <div class="file-explorer__panels">
           <${FavoritesPanel} className="file-explorer__favorites-panel" 
-            items=${this.state.favorites}
-            currentPath=${this.#locationStack.current}
-            onClick=${(item) => this.#locationStack.push(item.path)}
+            :items=${this.state.favorites}
+            :currentPath=${this.#locationStack.current}
+            :onClick=${(item) => this.#locationStack.push(item.path)}
           />
-          ${await this.#renderDirectoryContent()}
+          <div class="file-explorer__right-panel">
+            <div ref=${this.#directoryContentRef} class="file-explorer__directory-content">
+              ${await this.#renderDirectoryContent()}
+            </div>
+            <div class="file-explorer__bottom-bar">${await this.#renderStatusBar()}</div>
+          </div>
       </div>
-
-      <div class="file-explorer__bottom-bar">${await this.#renderStatusBar()}</div>
 
       <div class="file-explorer__dropzone" style="visibility: ${isShowUploadDropZone ? "visible" : "hidden"}">
         <div>Drag one or more files to this <i>drop zone</i>.</div>
