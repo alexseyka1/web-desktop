@@ -1,5 +1,5 @@
 import Helper from "../../Helper"
-import Vector from "../../Vector"
+import Vector from "../../../classes/Vector"
 import { WindowEvents } from "../../Window"
 
 const BORDER_SIZE = 8

@@ -8,7 +8,7 @@ import Application from "../../modules/Application"
 import Hier from "../../hier/hier"
 import Explorer from "./components/Explorer"
 import manifest from "./manifest.json"
-import Vector from "../../modules/Vector"
+import Vector from "../../classes/Vector"
 
 class FileExplorer extends Application {
   /** @type {Window} */

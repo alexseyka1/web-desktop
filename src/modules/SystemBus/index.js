@@ -42,6 +42,9 @@ export const SYSTEM_BUS_EVENTS = {
   WINDOW_SYSTEM: {
     STACK_CHANGED: "window-system:stack-changed",
   },
+  STD_INPUT: "std-input",
+  STD_OUTPUT: "std-output",
+  STD_ERROR: "std-error",
 }
 
 /**

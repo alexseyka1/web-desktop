@@ -1,7 +1,9 @@
+import Shell from "../applications/Terminal/Shell"
 import { getDefinedApplications } from "../classes/ApplicationFinder"
 import Application, { APPLICATION_EVENTS } from "./Application"
 import { getFileNameFromPath } from "./FileSystem"
-import systemBus, { SYSTEM_BUS_COMMANDS } from "./SystemBus"
+import { StandardStreams } from "./StandardStreams"
+import systemBus, { SYSTEM_BUS_COMMANDS, SYSTEM_BUS_EVENTS } from "./SystemBus"
 
 const COMMANDS = {
   "test-text": ([times = 1]) => {
@@ -31,10 +33,11 @@ const COMMANDS = {
   },
   whoami: () => "root",
   counter: class extends Application {
-    async main() {
-      this._output(`\n`)
-      for (let i = 0; i < 100; i++) {
-        this._output(`\r[${i}/100] loading...`)
+    async main(args) {
+      let max = 100
+      if (args && args.length) max = args[0]
+      for (let i = 1; i <= max; i++) {
+        this.println(`[${i}/${max}] loading...`)
         await new Promise((resolve) => requestAnimationFrame(() => resolve()))
       }
     }
@@ -42,7 +45,7 @@ const COMMANDS = {
   sum: class extends Application {
     async main(args) {
       if (args.length) {
-        return this._output(
+        return this.print(
           args
             .reduce((sum, num) => {
               num = parseFloat(num.replace(",", "."))
@@ -54,7 +57,7 @@ const COMMANDS = {
       }
 
       let sum = 0
-      this._output(`Please specify any numbers to sum:`)
+      this.println(`Please specify any numbers to sum:`)
 
       while (true) {
         const string = await this._input()
@@ -64,35 +67,26 @@ const COMMANDS = {
         sum += number
       }
 
-      this._output(`Sum: ${sum}`)
+      this.println(`Sum: ${sum}`)
     }
   },
+  sh: Shell,
 }
 
 class AppRunner {
   onInput = () => ""
-  onOutput = () => {}
-  onError = () => {}
 
   setOnInput(callback) {
     if (!callback || typeof callback !== "function") callback = () => ""
     this.onInput = callback
   }
 
-  setOnOutput(callback) {
-    if (!callback || typeof callback !== "function") callback = () => {}
-    this.onOutput = callback
-  }
-
-  setOnError(callback) {
-    if (!callback || typeof callback !== "function") callback = () => {}
-    this.onError = callback
-  }
-
   /**
    * @param {Application|Function} application
+   * @param {String} inputString
+   * @param {StandardStreams} streams
    */
-  run(application, inputString) {
+  run(application, inputString, streams) {
     return new Promise((resolve, reject) => {
       /**
        * Get input arguments
@@ -101,14 +95,21 @@ class AppRunner {
       let keys = { __input: inputString }
       if (inputString && typeof inputString === "string") {
         let _str = inputString
-        const getNextKey = () => _str.match(/--([\w-_]+)\=(["'`])(.*)\2[\s|$]/) || _str.match(/--([\w-_]+)(\=([^\s]*))?/)
+        const getNextKeys = () => _str.match(/-([\w-_]+)/)
+        const getNextKeyValue = () => _str.match(/--([\w-_]+)\=(["'`])(.*)\2[\s|$]/) || _str.match(/--([\w-_]+)(\=([^\s]*))?/)
         let _key
-        while ((_key = getNextKey())) {
+        while ((_key = getNextKeyValue())) {
           const [_match, _paramName, , _value] = _key
           keys[_paramName.toLowerCase()] = _value ?? true
           _str = _str.replace(_match, "")
         }
-        args = _str.trim().split(" ")
+        while ((_key = getNextKeys())) {
+          const [_match, _keys] = _key
+          _keys.split("").forEach((item) => (keys[item] = true))
+          _str = _str.replace(_match, "")
+        }
+        _str = _str.trim()
+        if (_str.length) args = _str.split(" ")
       }
 
       /**
@@ -118,7 +119,7 @@ class AppRunner {
         const dispatchExitCode = (_app, exitCode) => _app.dispatchEvent(new CustomEvent(APPLICATION_EVENTS.CLOSED, { detail: exitCode }))
 
         /** @type {Application} */
-        const app = new application()
+        const app = new application(streams)
         app.addEventListener(APPLICATION_EVENTS.INPUT_REQUESTED, async () => {
           try {
             const _inputString = await this.onInput()
@@ -128,10 +129,10 @@ class AppRunner {
           }
         })
         app.addEventListener(APPLICATION_EVENTS.OUTPUT_STREAM, (e) => {
-          this.onOutput(e?.detail || "")
+          streams.output.write(e?.detail || "")
         })
         app.addEventListener(APPLICATION_EVENTS.ERROR_STREAM, (e) => {
-          this.onError(e?.detail || "")
+          streams.error.write(e?.detail || "")
         })
         app.addEventListener(APPLICATION_EVENTS.CLOSED, (e) => {
           resolve(e?.detail)
@@ -150,19 +151,19 @@ class AppRunner {
           if (mainReturns instanceof Promise) {
             mainReturns
               .then((_response) => {
-                this.onOutput(_response)
+                streams.output.write(_response)
                 resolve(_response)
               })
               .catch((error) => {
-                this.onError(error instanceof Error ? error.message : error)
+                streams.error.write(error instanceof Error ? error.message : error)
                 resolve()
               })
           } else {
-            if (mainReturns) this.onOutput(mainReturns)
+            if (mainReturns) streams.output.write(mainReturns)
             resolve(mainReturns)
           }
         } catch (error) {
-          this.onError(error instanceof Error ? error.message : error)
+          streams.error.write(error instanceof Error ? error.message : error)
           resolve()
         }
       } else {
@@ -174,32 +175,36 @@ class AppRunner {
 
 const appRunner = new AppRunner()
 
-const runWithDefinedCommands = async ([command, definedCommands], response, next) => {
+const runWithDefinedCommands = async ([command, definedCommands, streams], response, next) => {
   const [, commandName, inputString] = command.match(/^([^\s]+)\s?(.*)?/)
 
   if (commandName === "all-commands") {
-    response.exitCode = await appRunner.run(async () => {
-      return `\nAll commands available:\n - ${Object.keys({ ...COMMANDS, ...definedCommands }).join("\n - ")}`
-    })
+    response.exitCode = await appRunner.run(
+      async () => {
+        return `All commands available:\n - ${Object.keys({ ...COMMANDS, ...definedCommands }).join("\n - ")}`
+      },
+      "",
+      streams
+    )
     next()
   } else if (commandName in definedCommands) {
-    response.exitCode = await appRunner.run(definedCommands[commandName], inputString)
+    response.exitCode = await appRunner.run(definedCommands[commandName], inputString, streams)
     next()
   } else if (commandName in COMMANDS) {
-    response.exitCode = await appRunner.run(COMMANDS[commandName], inputString)
+    response.exitCode = await appRunner.run(COMMANDS[commandName], inputString, streams)
     next()
   } else if (/^\/applications\/.*\.app$/.test(commandName)) {
     const appName = getFileNameFromPath(commandName)
     const definedApplications = getDefinedApplications()
     if (!(appName in definedApplications)) {
-      appRunner.onError(`Unknown command "${appName}"\n`)
+      streams?.error?.write(`Unknown command "${appName}"`)
     } else {
       const requiredApplication = definedApplications[appName].module
-      response.exitCode = await appRunner.run(requiredApplication, inputString)
+      response.exitCode = await appRunner.run(requiredApplication, inputString, streams)
     }
     next()
   } else {
-    appRunner.onError(`Unknown command "${commandName}"\n`)
+    streams?.error?.write(`Unknown command "${commandName}"`)
     next()
   }
 }
@@ -209,8 +214,8 @@ systemBus
     await runWithDefinedCommands([command, {}], response, next)
   })
   .addMiddleware(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_COMMAND_WITH_DEFINED_COMMANDS, runWithDefinedCommands)
-  .addMiddleware(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_APPLICATION, async ({ app, input }, response, next) => {
-    response.exitCode = await appRunner.run(app, input)
+  .addMiddleware(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_APPLICATION, async ({ app, input, streams }, response, next) => {
+    response.exitCode = await appRunner.run(app, input, streams)
     next()
   })
 

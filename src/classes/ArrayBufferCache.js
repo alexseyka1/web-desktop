@@ -1,5 +1,3 @@
-const URL_LIVE_MS = 100
-
 class ArrayBufferCache {
   /** @type {Map<string, string>} */
   #cachedFiles = new Map()

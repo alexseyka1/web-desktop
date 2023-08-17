@@ -37,6 +37,10 @@ export default class FileMeta {
     return `${this.path}/${this.name}`.replace(/\/+/, "/")
   }
 
+  get isApplication() {
+    return this.mimeType === "application"
+  }
+
   static fromStorage(params) {
     const instance = new FileMeta()
 

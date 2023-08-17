@@ -1,3 +1,4 @@
+import { StandardStreams } from "./StandardStreams"
 import systemBus, { SYSTEM_BUS_COMMANDS } from "./SystemBus"
 import Window, { WindowEvents } from "./Window"
 import WindowWrapper from "./WindowSystem/WindowWrapper"
@@ -13,6 +14,16 @@ export const APPLICATION_EVENTS = {
 
 class Application extends EventTarget {
   _windows = new Set()
+  /** @type {StandardStreams} */
+  streams
+
+  /**
+   * @param {StandardStreams} streams
+   */
+  constructor(streams) {
+    super()
+    this.streams = streams
+  }
 
   /**
    * @param {string[]} args
@@ -24,6 +35,9 @@ class Application extends EventTarget {
   }
 
   close(exitCode) {
+    if (this._windows.size) {
+      this._windows.forEach((_window) => _window.dispatchEvent(new Event(WindowEvents.CLOSE)))
+    }
     return this.dispatchEvent(new CustomEvent(APPLICATION_EVENTS.CLOSED, { detail: exitCode }))
   }
 
@@ -65,11 +79,14 @@ class Application extends EventTarget {
   }
 
   _output(value) {
-    return this.dispatchEvent(new CustomEvent(APPLICATION_EVENTS.OUTPUT_STREAM, { detail: value }))
+    return this.streams.output.write(value)
   }
 
+  print = (value) => this._output(value)
+  println = (value) => this.print((value || "") + "\n")
+
   _error(value) {
-    return this.dispatchEvent(new CustomEvent(APPLICATION_EVENTS.ERROR_STREAM, { detail: value }))
+    return this.streams.error.write(value)
   }
 }
 

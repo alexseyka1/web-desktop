@@ -2,32 +2,23 @@ import Application from "../../modules/Application"
 import "./styles.scss"
 import { WindowEvents } from "../../modules/Window"
 import appRunner from "../../modules/AppRunner"
-import systemBus, { SYSTEM_BUS_COMMANDS } from "../../modules/SystemBus"
+import systemBus, { SYSTEM_BUS_COMMANDS, SYSTEM_BUS_EVENTS } from "../../modules/SystemBus"
 import { resolvePath } from "../../modules/FileSystem"
+import Readline from "../../classes/Readline"
+import READLINE_COMMANDS from "../../classes/Readline/ReadlineCommands"
+import Shell from "./Shell"
+import { StandardStreams } from "../../modules/StandardStreams"
 
 const MODES = {
   COMMANDS_TYPING: "mode:commands-typing",
   APPLICATION_INPUT: "mode:application-input",
 }
 
-const checkDirectoryExists = async (path) => {
-  const { file: directoryModel } = await systemBus.execute(SYSTEM_BUS_COMMANDS.FILE_SYSTEM.READ_FILE_META, path)
-  if (!directoryModel) {
-    throw new Error(`Directory "${path}" not found.`)
-  } else if (!directoryModel.isDirectory) {
-    throw new Error(`File "${path}" is not a directory.`)
-  }
-}
-
 class Terminal extends Application {
   #state = {
     isWindowActive: true,
     isPromptActive: true,
-    historyCommandIndex: null,
-    history: [],
     path: "/",
-    inputString: "",
-    cursorPosition: null,
   }
   #window
   #mode = MODES.COMMANDS_TYPING
@@ -39,6 +30,79 @@ class Terminal extends Application {
     searchAll: null,
     partName: null,
     currentFileIndex: 0,
+  }
+  /** @type {Readline} */
+  #readline
+  /** @type {StandardStreams} */
+  #streams
+
+  async main() {
+    this.#window = await this.createWindow({
+      width: 500,
+      height: 400,
+      title: "Terminal",
+      icon: `<span class="material-symbols-outlined">terminal</span>`,
+    })
+    this.#window.domElement.classList.add("terminal-app")
+    this.#window.contentElement.innerHTML = `<div>
+      <pre class="terminal-app__logs"></pre><pre class="terminal-app__command-string"></pre>
+    </div>`
+    const background = document.createElement("template")
+    background.innerHTML = `<div class="terminal-app__background"></div>`
+    this.#window.domElement.prepend(background.content)
+
+    /**
+     * Copy and paste selected text
+     */
+    this.#window.domElement.addEventListener("contextmenu", async (e) => {
+      const selection = globalThis.getSelection()
+      if (selection.type === "Range") {
+        const range = selection.getRangeAt(0)
+        const text = range.toString()
+        if (text && text.length) {
+          globalThis.navigator.clipboard.writeText(text)
+          range.collapse(true)
+        }
+      } else {
+        const clipboardText = await globalThis.navigator.clipboard.readText()
+        if (clipboardText && clipboardText.length) {
+          clipboardText.split("").forEach((char) => this.#readline.execute(char))
+        }
+      }
+    })
+
+    this.#initState()
+
+    this.#window.addEventListener(WindowEvents.BLURED, () => {
+      this.#state.isWindowActive = false
+      this.#unregisterEvents()
+    })
+    this.#window.addEventListener(WindowEvents.FOCUSED, () => {
+      this.#state.isWindowActive = true
+      this.#registerEvents()
+    })
+
+    this.renderCommandLine()
+
+    this.#streams = new StandardStreams()
+    this.#streams.output.onByte((char) => this.#log(char))
+    this.#streams.error.onComplete((error) => this.#log(error + "\n"))
+
+    systemBus.execute(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_APPLICATION, { app: Shell, streams: this.#streams }).then(({ exitCode }) => {
+      if (exitCode) {
+        this.#log(`Command "sh" exited with code: ${exitCode}`)
+      } else {
+        this.close()
+      }
+    })
+  }
+
+  #registerEvents() {
+    appRunner.setOnInput(this.#onInputRequested.bind(this))
+  }
+
+  #unregisterEvents() {
+    appRunner.setOnInput(null)
   }
 
   get prompt() {
@@ -144,84 +208,73 @@ class Terminal extends Application {
         _reject(value)
       }
       const onInputStringChanged = () => {
-        if (this.#state.inputString.endsWith("/")) {
+        if (this.#readline.string.endsWith("/")) {
           this.#fileAutocomplete.directory = null
           this.#fileAutocomplete.searchAll = null
         }
       }
 
+      /**
+       * @param {KeyboardEvent} e
+       */
       const keydownHandler = async (e) => {
         e.preventDefault()
         if (e.key.length === 1 && !e.ctrlKey) {
-          /**
-           * Add character
-           */
-          if (this.#state.cursorPosition) {
-            /**
-             * If cursor position is not null
-             */
-            const _pos = this.#state.inputString.length - Math.abs(this.#state.cursorPosition)
-            let _newString = this.#state.inputString.split("")
-            _newString.splice(_pos, 0, e.key)
-            _newString = _newString.join("")
-            this.#state.inputString = _newString
-          } else {
-            this.#state.inputString = this.#state.inputString + e.key
-          }
+          this.#readline.execute(e.key)
           onInputStringChanged()
-        } else if (e.ctrlKey && e.key === "c") {
-          /**
-           * Ctrl+C pressed
-           */
-          reject(e)
         } else if (["delete", "backspace"].includes(e.key.toLowerCase())) {
-          /**
-           * Delete last character
-           */
-          if (this.#state.cursorPosition) {
-            /**
-             * If cursor position is not null
-             */
-            const _pos = this.#state.inputString.length - Math.abs(this.#state.cursorPosition)
-            let _newString = this.#state.inputString.split("")
-            _newString.splice(_pos - 1, 1)
-            _newString = _newString.join("")
-            this.#state.inputString = _newString
-          } else {
-            this.#state.inputString = this.#state.inputString.substring(0, this.#state.inputString.length - 1)
-          }
+          this.#readline.execute(READLINE_COMMANDS.REMOVE_CHARACTER)
           onInputStringChanged()
         } else if (e.key.toLowerCase() === "enter") {
           /**
            * Enter was pressed
            */
-          const _inputString = this.#state.inputString
-          this.#state.historyCommandIndex = null
-          this.#state.inputString = ""
+          this.#state.cursorPosition = null
+          let _str = this.#readline.string
+          this.#readline.execute(READLINE_COMMANDS.CLEAR_STRING)
+          this.#readline.addToHistory(_str)
           globalThis.removeEventListener("keydown", keydownHandler)
-          resolve(_inputString)
+          resolve(_str)
           onInputStringChanged()
-        } else if (["arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase())) {
+        } else if (e.key.toLowerCase() === "arrowleft") {
           /**
-           * Some arrow key pressed
+           * Left arrow button pressed
            */
-          reject(e)
-        } else if (e.key.toLowerCase() === "tab" && this.#state.inputString.length) {
+          this.#readline.execute(READLINE_COMMANDS.MOVE_CURSOR_BACKWARD)
+        } else if (e.key.toLowerCase() === "arrowright") {
           /**
-           * Autocomplete command
+           * Right arrow button pressed
            */
-          await this.fetchAutocomplete()
-          const _nextNameAutocomplete = this.filenameAutocomplete
-          if (_nextNameAutocomplete) {
-            this.#state.inputString = this.#state.inputString.replace(/^(.*\/).*$/, "$1") + _nextNameAutocomplete
+          this.#readline.execute(READLINE_COMMANDS.MOVE_CURSOR_FORWARD)
+        } else if (e?.key.toLowerCase() === "arrowup") {
+          /**
+           * Up arrow button pressed
+           */
+          this.#readline.execute(READLINE_COMMANDS.NAVIGATE_HISTORY_BACKWARD)
+          onInputStringChanged()
+        } else if (e?.key.toLowerCase() === "arrowdown") {
+          /**
+           * Down arrow button pressed
+           */
+          this.#readline.execute(READLINE_COMMANDS.NAVIGATE_HISTORY_FORWARD)
+          onInputStringChanged()
+        } else if (e.key.toLowerCase() === "tab") {
+          /**
+           * Tab pressed
+           */
+          if (this.#readline.string.length) {
+            /**
+             * Autocomplete command
+             */
+            console.log("Autocomplete must be here")
+            // await this.fetchAutocomplete()
+            // const _nextNameAutocomplete = this.filenameAutocomplete
+            // if (_nextNameAutocomplete) {
+            //   this.#state.inputString = this.#state.inputString.replace(/^(.*\/).*$/, "$1") + _nextNameAutocomplete
+            // }
+          } else if (e.key.toLowerCase() === this.#lastChar && this.#mode === MODES.COMMANDS_TYPING && !this.#readline.string.length) {
+            this.runCommand("all-commands")
           }
-        } else if (
-          e.key.toLowerCase() === "tab" &&
-          e.key.toLowerCase() === this.#lastChar &&
-          this.#mode === MODES.COMMANDS_TYPING &&
-          !this.#state.inputString.length
-        ) {
-          this.runCommand("all-commands")
         }
 
         this.#lastChar = this.#lastChar !== null ? null : e.key.toLowerCase()
@@ -232,119 +285,28 @@ class Terminal extends Application {
     })
   }
 
-  async #startTyping() {
-    while (this.#state.isWindowActive && this.#state.isPromptActive) {
-      try {
-        const command = await this.#getInputString()
-        this.#state.cursorPosition = null
-        if (command.trim().length) {
-          this.#state.history.push(command)
-          this.#state.historyCommandIndex = null
-          this.#log(`\n${this.prompt} ${command}\n`)
+  // async #startTyping() {
+  //   while (this.#state.isWindowActive && this.#state.isPromptActive) {
+  //     try {
+  //       const command = await this.#getInputString()
+  //       this.#state.cursorPosition = null
+  //       if (command.trim().length) {
+  //         this.#log(`${this.prompt} ${command}`)
 
-          await this.runCommand(command)
-        } else {
-          this.#log(`\n${this.prompt}`)
-        }
-      } catch (e) {
-        if (e?.key.toLowerCase() === "arrowup") {
-          /**
-           * Previous command in history
-           */
-          this.#state.cursorPosition = null
-          if (this.#state.history.length) {
-            if (this.#state.historyCommandIndex === null) this.#state.historyCommandIndex = this.#state.history.length - 1
-            else if (this.#state.historyCommandIndex > 0) this.#state.historyCommandIndex--
-            const command = this.#state.history[this.#state.historyCommandIndex]
-            this.#state.inputString = command
-          }
-        } else if (e?.key.toLowerCase() === "arrowdown") {
-          /**
-           * Next command in history
-           */
-          this.#state.cursorPosition = null
-          if (this.#state.history.length && this.#state.historyCommandIndex !== null) {
-            if (this.#state.historyCommandIndex < this.#state.history.length - 1) this.#state.historyCommandIndex++
-            else if (this.#state.historyCommandIndex === this.#state.history.length - 1) this.#state.historyCommandIndex = null
+  //         await this.runCommand(command)
+  //       } else {
+  //         this.#log(`${this.prompt}`)
+  //       }
+  //     } catch (e) {}
+  //   }
+  // }
 
-            if (this.#state.historyCommandIndex === null) {
-              this.#state.inputString = ""
-            } else {
-              const command = this.#state.history[this.#state.historyCommandIndex]
-              this.#state.inputString = command
-            }
-          }
-        } else if (e?.key.toLowerCase() === "arrowleft") {
-          this.#state.cursorPosition = Math.max(this.#state.cursorPosition - 1, this.#state.inputString.length * -1)
-          if (this.#state.cursorPosition === 0) this.#state.cursorPosition = null
-        } else if (e?.key.toLowerCase() === "arrowright") {
-          this.#state.cursorPosition = Math.min(this.#state.cursorPosition + 1, 0)
-          if (this.#state.cursorPosition === 0) this.#state.cursorPosition = null
-        }
-      }
+  #initReadline() {
+    this.#readline = new Readline()
+    this.#readline.onChange = () => {
+      this.renderCommandLine()
+      this.commandStringElement.scrollIntoView({ block: "end", inline: "end" })
     }
-  }
-
-  async main(args) {
-    this.#window = await this.createWindow({
-      width: 500,
-      height: 400,
-      title: "Terminal",
-      icon: `<span class="material-symbols-outlined">terminal</span>`,
-    })
-    this.#window.domElement.classList.add("terminal-app")
-    this.#window.contentElement.innerHTML = `<div>
-      <pre class="terminal-app__logs"></pre>
-      <pre class="terminal-app__command-string"></pre>
-    </div>`
-
-    /**
-     * Copy and paste selected text
-     */
-    this.#window.domElement.addEventListener("contextmenu", async (e) => {
-      const selection = globalThis.getSelection()
-      if (selection.type === "Range") {
-        const range = selection.getRangeAt(0)
-        const text = range.toString()
-        if (text && text.length) {
-          globalThis.navigator.clipboard.writeText(text)
-          this.#state.inputString += text
-          range.collapse(true)
-        }
-      } else {
-        const clipboardText = await globalThis.navigator.clipboard.readText()
-        if (clipboardText && clipboardText.length) {
-          this.#state.inputString += clipboardText
-        }
-      }
-    })
-
-    let path
-    if (args) path = args[0]
-    if (path) {
-      try {
-        await checkDirectoryExists(path)
-        this.#state.path = path
-      } catch (e) {
-        this.#log(e.message)
-        this.#state.path = "/"
-      }
-    }
-    this.#initState()
-
-    this.#window.addEventListener(WindowEvents.BLURED, () => {
-      this.#state.isWindowActive = false
-    })
-    this.#window.addEventListener(WindowEvents.FOCUSED, () => {
-      this.#state.isWindowActive = true
-      if (this.#mode === MODES.COMMANDS_TYPING) this.#startTyping()
-    })
-
-    appRunner.setOnInput(this.#onInputRequested.bind(this))
-    appRunner.setOnOutput((message) => this.#log(message))
-    appRunner.setOnError((message) => this.#log(message))
-    this.render()
-    this.#startTyping()
   }
 
   #initState() {
@@ -354,21 +316,31 @@ class Terminal extends Application {
       },
       set: (target, prop, value, receiver) => {
         const result = Reflect.set(target, prop, value, receiver)
-        this.render()
-        if (prop === "inputString") {
-          this.commandStringElement.scrollIntoView({ block: "end", inline: "end" })
-        }
+        this.renderCommandLine()
         return result
       },
     })
   }
 
   #onInputRequested() {
-    return new Promise((resolve, reject) => {
+    const _prevReadline = this.#readline,
+      revertReadline = () => (this.#readline = _prevReadline)
+    this.#initReadline()
+
+    return new Promise((_resolve, _reject) => {
+      const resolve = (...args) => {
+          revertReadline()
+          _resolve(...args)
+        },
+        reject = (...args) => {
+          revertReadline()
+          _reject(...args)
+        }
+
       const getInput = () => {
         return this.#getInputString()
           .then((_inputString) => {
-            this.#log(`\n${_inputString}`)
+            this.#log(`${_inputString}\n`)
             resolve(_inputString)
           })
           .catch(() => reject())
@@ -379,13 +351,13 @@ class Terminal extends Application {
     })
   }
 
-  render() {
-    const { inputString, isWindowActive, isPromptActive, cursorPosition } = this.#state
+  renderCommandLine() {
+    const { isWindowActive } = this.#state
+    const inputString = this.#readline?.string || "",
+      cursorPosition = this.#readline?.cursorPosition || null
     const cursorStyle = cursorPosition !== null ? `margin-left: ${cursorPosition}ch` : ""
 
-    const commandString = isWindowActive
-      ? `${isPromptActive ? `${this.prompt}&nbsp;` : ""}${inputString}<span class="terminal-app__cursor" style="${cursorStyle}"></span>`
-      : `${isPromptActive ? `${this.prompt}&nbsp;` : ""}${inputString}`
+    const commandString = isWindowActive ? `${inputString}<span class="terminal-app__cursor" style="${cursorStyle}"></span>` : `${inputString}`
 
     this.commandStringElement.innerHTML = commandString
   }
@@ -393,71 +365,52 @@ class Terminal extends Application {
   #log(message) {
     if (!message) return
     const addTextNode = (_text) => {
-      const span = document.createElement("div")
-      span.innerText = _text.trim()
-      this.logsElement.append(span)
+      this.logsElement.innerHTML += _text
     }
 
-    if (message.indexOf("\r") !== -1) {
-      message = message.replace(/\\r/g, "")
-      if (!this.logsElement.childNodes.length) addTextNode(message.replace)
-      else {
-        const lastTextNode = this.logsElement.childNodes[this.logsElement.childNodes.length - 1]
-        lastTextNode.textContent = message
-      }
-    } else {
-      addTextNode(message)
-    }
+    // if (message.indexOf("\r") !== -1) {
+    //   message = message.replace(/\\r/g, "")
+    //   if (!this.logsElement.childNodes.length) addTextNode(message.replace)
+    //   else {
+    //     const lastTextNode = this.logsElement.childNodes[this.logsElement.childNodes.length - 1]
+    //     lastTextNode.textContent = message
+    //   }
+    // } else {
+    addTextNode(message)
+    // }
 
     this.commandStringElement.scrollIntoView({ block: "start", inline: "end" })
   }
 
-  COMMANDS = {
-    pwd: () => this.#state.path,
-    cd: async ([path]) => {
-      if (!path) return
-      const resolvedPath = resolvePath(this.#state.path, path)
-      if (resolvedPath !== "/") checkDirectoryExists(resolvedPath)
-      this.#state.path = resolvedPath
-    },
-    clear: () => {
-      const el = this.#window.contentElement,
-        divHeight = el.offsetHeight,
-        lineHeight = el.computedStyleMap().get("line-height").value,
-        lines = Math.ceil(divHeight / lineHeight)
-      this.#log("\n".repeat(lines))
-    },
-  }
+  // async runCommand(command) {
+  //   this.#state.isPromptActive = false
+  //   this.#mode = MODES.APPLICATION_INPUT
+  //   let _availableCommands = this.COMMANDS
 
-  async runCommand(command) {
-    this.#state.isPromptActive = false
-    this.#mode = MODES.APPLICATION_INPUT
-    let _availableCommands = this.COMMANDS
+  //   if (this.#state.path === "/applications") {
+  //     _availableCommands = { ..._availableCommands }
+  //   }
 
-    if (this.#state.path === "/applications") {
-      _availableCommands = { ..._availableCommands }
-    }
+  //   /**
+  //    * Replace each relative path to absolute one
+  //    */
+  //   let _command = command
+  //   const _paths = _command.match(/(\.{1,2})?\/[^\s]+/g)
+  //   if (_paths) {
+  //     for (let _path of _paths) {
+  //       _command = _command.replace(_path, resolvePath(this.#state.path, _path))
+  //     }
+  //   }
 
-    /**
-     * Replace each relative path to absolute one
-     */
-    let _command = command
-    const _paths = _command.match(/(\.{1,2})?\/[^\s]+/g)
-    if (_paths) {
-      for (let _path of _paths) {
-        _command = _command.replace(_path, resolvePath(this.#state.path, _path))
-      }
-    }
+  //   try {
+  //     await systemBus.execute(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_COMMAND_WITH_DEFINED_COMMANDS, [_command, _availableCommands])
+  //   } catch (e) {
+  //     this.#log(`Internal error: ${e.message}`)
+  //   }
 
-    try {
-      await systemBus.execute(SYSTEM_BUS_COMMANDS.APP_RUNNER.RUN_COMMAND_WITH_DEFINED_COMMANDS, [_command, _availableCommands])
-    } catch (e) {
-      this.#log(`Internal error: ${e.message}`)
-    }
-
-    this.#state.isPromptActive = true
-    this.#mode = MODES.COMMANDS_TYPING
-  }
+  //   this.#state.isPromptActive = true
+  //   this.#mode = MODES.COMMANDS_TYPING
+  // }
 }
 
 export default Terminal

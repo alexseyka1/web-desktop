@@ -68,9 +68,9 @@ class WindowSystem {
       this.windows.push(wrapper)
       this.#attachWindowEvents(wrapper)
 
-      this.focusOnWindow(wrapper)
       wrapper.domElement.addEventListener("mousedown", () => this.focusOnWindow(wrapper))
       this.#appendAndRunWindow(wrapper)
+      setTimeout(() => this.focusOnWindow(wrapper))
 
       return wrapper
     }

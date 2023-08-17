@@ -1,6 +1,6 @@
 import Notepad from "../../applications/Notepad"
 import { addDropdownSubMenu } from "../MenuPanel"
-import Vector from "../Vector"
+import Vector from "../../classes/Vector"
 import Window, { WindowEvents } from "../Window"
 import WindowSystem from "../WindowSystem"
 import "../../styles/bottom-bar.scss"

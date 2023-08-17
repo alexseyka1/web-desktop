@@ -1,6 +1,6 @@
 import animations from "../../Animations"
 import { addDropdownSubMenu } from "../../MenuPanel"
-import Vector from "../../Vector"
+import Vector from "../../../classes/Vector"
 import Window, { WindowEvents } from "../../Window"
 import WindowWrapper from "../WindowWrapper"
 

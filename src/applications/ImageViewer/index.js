@@ -1,5 +1,5 @@
 import { WindowMessages } from "../../modules/Window/WindowMessage"
-import gesturesHandler from "../../modules/HandleGestures"
+import gesturesHandler from "./HandleGestures"
 import "./styles.scss"
 import imageProcessing from "../../modules/ImageProcessing"
 import Application from "../../modules/Application"

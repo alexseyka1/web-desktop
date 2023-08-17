@@ -1,4 +1,4 @@
-import Vector from "./Vector"
+import Vector from "../../classes/Vector"
 
 const WHEEL_SCALE_SPEEDUP = 2
 const WHEEL_TRANSLATION_SPEEDUP = 2

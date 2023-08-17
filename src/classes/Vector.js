@@ -11,6 +11,7 @@ class Vector {
   set(x, y) {
     ;[this.x, this.y] = [x, y]
   }
+
   setFromVector(vector) {
     this.set(vector.x, vector.y)
   }

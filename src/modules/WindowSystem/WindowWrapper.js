@@ -1,6 +1,6 @@
 import { withSharedValue } from "../Helper"
 import { getRegisterMenuObject } from "../MenuPanel"
-import Vector from "../Vector"
+import Vector from "../../classes/Vector"
 import Window, { WindowEvents } from "../Window"
 import getEventTargetMixin from "./mixins/getEventTargetMixin"
 import getPositioningMixin from "./mixins/getPositioningMixin"

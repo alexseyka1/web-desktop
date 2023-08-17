@@ -1,4 +1,4 @@
-import Vector from "../../Vector"
+import Vector from "../../../classes/Vector"
 import { WindowEvents } from "../../Window"
 
 const WINDOW_DEFAULTS = {
