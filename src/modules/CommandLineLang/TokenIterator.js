@@ -187,8 +187,10 @@ class TokenIterator {
       return this.readFilePath()
     } else if (isQuote(char)) {
       if (char === `"`) {
-        const braceExpansion = this.#getBraceExpansion()
-        if (braceExpansion) return braceExpansion
+        let braceExpansion
+        let paramExpansion
+        if ((braceExpansion = this.#getBraceExpansion())) return braceExpansion
+        else if ((paramExpansion = this.#getParamExpansion())) return paramExpansion
       }
       return this.readString(char)
     } else if (isMinus(char)) {
@@ -233,9 +235,7 @@ class TokenIterator {
    */
   #getParamExpansion() {
     const regexp = new RegExp(`^${PARAM_EXPANSION_REGEXP.source}`, "gm")
-
     if (regexp.test(this.#inputIterator.getRestInput())) {
-      console.log("Param Expansion recognized.")
       return new AstParamExpansionNode(this.readEscaped(`"`))
     }
     return false

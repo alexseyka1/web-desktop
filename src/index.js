@@ -161,7 +161,7 @@ const assert = (str, expected, params = {}) => {
   let response = result == expected
   if (typeof expected === "object") {
     if (typeof result !== "object") response = false
-    else {
+    else if (expected != null) {
       response = true
       for (let key of Object.keys(expected)) response &= key in result && result[key] == expected[key]
     }
@@ -235,7 +235,7 @@ assert(`test = "Dolly"; "\${food:=test}"; "\${food}"`, "Dolly")
 assert(`food = "cake"; test = "Dolly"; "\${food:=test}"; "\${food}"`, "cake")
 assert(`food = "cake"; test = "Dolly"; "\${food+test}"`, "Dolly")
 assert(`food = "cake"; test = "Dolly"; "\${food:+test}"`, "Dolly")
-assert(`test = "Dolly"; "\${food:+test}"`, "null")
+assert(`test = "Dolly"; "\${food:+test}"`, null)
 assert(`"\${food:?food is not found}"`, "food is not found", { throwError: true })
 assert(`"\${food?food is not found}"`, "food is not found", { throwError: true })
 console.timeLog("✅ Parameter expansions - Default values")

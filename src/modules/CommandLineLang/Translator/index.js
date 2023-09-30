@@ -231,6 +231,11 @@ export const evaluate = (exp, env) => {
       let result
 
       switch (true) {
+        case exp.range instanceof AstParamExpansionNode: {
+          const range = substituteParamExpansion(exp.range.value, _loopEnv)
+          console.log({ range })
+          break
+        }
         case exp.range instanceof AstBraceExpansionNode: {
           /** @type {AstVariableNode} */
           const variable = exp.variable

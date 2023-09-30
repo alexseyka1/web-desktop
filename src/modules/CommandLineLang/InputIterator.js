@@ -2,7 +2,7 @@ import IteratorInterface from "./IteratorInterface"
 
 export const VARIABLE_VALID_NAME_REGEXP = /[a-zA-Z0-9_]/
 export const NUMBER_RANGE_REGEXP = /{([0-9]+)\\\.\\\.([0-9]+)(?:\\\.\\\.)?([0-9]+)?}/
-export const PARAM_EXPANSION_REGEXP = /\${[^$\n}]+}/gm
+export const PARAM_EXPANSION_REGEXP = /([^ {}]+)?\${[^$\n}]+}([^ ;{}\\\n]+)?/gm
 export const BRACE_EXPANSION_REGEXP = new RegExp(`([^ {}]+)?(?:(?:(?:{)(.*\\\,[^,].*|.+\\\.\\\..+)(?:}))+)([^ ;{}\\\n]+)?`, "gm")
 export const NUMBER_REGEXP = /[0-9]+(\.[0-9]+)?/gm
 export const ARRAY_LIST_REGEXP = /\((([0-9]+(\.[0-9]+)?|(['"])[^'"]+\4)\s?)+\)/gm
