@@ -13,6 +13,7 @@ const AST_NODE_TYPES = {
   BINARY: "binary",
   PROGRAM: "prog",
   LOOP: "loop",
+  PARAM_EXPANSION: "param-expansion",
   BRACE_EXPANSION: "brace-expansion",
   ARRAY: "array",
 }
@@ -66,6 +67,12 @@ export class AstPunctuationNode extends AstValueNode {
 export class AstNumberNode extends AstValueNode {
   constructor(value) {
     super(AST_NODE_TYPES.NUMBER, value)
+  }
+}
+
+export class AstParamExpansionNode extends AstValueNode {
+  constructor(value) {
+    super(AST_NODE_TYPES.PARAM_EXPANSION, value)
   }
 }
 

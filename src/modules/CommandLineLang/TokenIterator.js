@@ -1,6 +1,16 @@
 import IteratorInterface from "./IteratorInterface"
-import InputIterator, { BRACE_EXPANSION_REGEXP, VARIABLE_VALID_NAME_REGEXP } from "./InputIterator"
-import { AstBraceExpansionNode, AstKeywordNode, AstNumberNode, AstOperatorNode, AstPunctuationNode, AstStringNode, AstVariableNode } from "./AstNodes"
+import InputIterator, { BRACE_EXPANSION_REGEXP, VARIABLE_VALID_NAME_REGEXP, ARRAY_LIST_REGEXP, NUMBER_REGEXP, PARAM_EXPANSION_REGEXP } from "./InputIterator"
+import {
+  AstArrayNode,
+  AstBraceExpansionNode,
+  AstKeywordNode,
+  AstNumberNode,
+  AstOperatorNode,
+  AstParamExpansionNode,
+  AstPunctuationNode,
+  AstStringNode,
+  AstVariableNode,
+} from "./AstNodes"
 
 export const KEYWORDS = {
   TRUE: "true",
@@ -14,6 +24,7 @@ export const KEYWORDS = {
   WHILE: "while",
   DO: "do",
   DONE: "done",
+  UNSET: "unset",
 }
 
 const isKeyword = (x) => {
@@ -174,38 +185,60 @@ class TokenIterator {
 
     if (isFilePathStart(char)) {
       return this.readFilePath()
-    }
-    if (isQuote(char)) {
+    } else if (isQuote(char)) {
       if (char === `"`) {
         const braceExpansion = this.#getBraceExpansion()
         if (braceExpansion) return braceExpansion
       }
       return this.readString(char)
-    }
-    if (isMinus(char)) {
+    } else if (isMinus(char)) {
       this.#hasMinus = true
       this.#inputIterator.next()
       return this.readNext()
-    }
-    if (isDigit(char)) return this.readNumber()
-    if (isOperator(char)) {
+    } else if (isDigit(char)) {
+      return this.readNumber()
+    } else if (isOperator(char)) {
       let operator = this.readWhile(isOperator)
       if (this.#hasMinus) {
         this.#hasMinus = false
         operator = `-${operator}`
       }
       return new AstOperatorNode(operator)
-    }
-    if (isVariableStart(char)) {
+    } else if (isVariableStart(char)) {
       this.#inputIterator.next()
       return this.readIdent("$")
-    }
-    if (isIdStart(char)) return this.readIdent()
-    if (isPunctuation(char)) {
+    } else if (isIdStart(char)) {
+      return this.readIdent()
+    } else if (isPunctuation(char)) {
+      let matches
+      if (char === "(" && (matches = this.#inputIterator.getRestInput()?.match(ARRAY_LIST_REGEXP))) {
+        this.#inputIterator.next()
+        let item = this.readNext()
+        let listElements = []
+        while (item && !(item instanceof AstPunctuationNode && item.value === ")")) {
+          listElements.push(item)
+          item = this.readNext()
+        }
+        return new AstArrayNode(listElements)
+      }
+
       return new AstPunctuationNode(this.#inputIterator.next())
     }
 
     this.#inputIterator.throwError("Can't handle character: " + char)
+  }
+
+  /**
+   * @returns {AstParamExpansionNode|false}
+   */
+  #getParamExpansion() {
+    const regexp = new RegExp(`^${PARAM_EXPANSION_REGEXP.source}`, "gm")
+
+    if (regexp.test(this.#inputIterator.getRestInput())) {
+      console.log("Param Expansion recognized.")
+      return new AstParamExpansionNode(this.readEscaped(`"`))
+    }
+    return false
   }
 
   /**

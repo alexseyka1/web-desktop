@@ -1,7 +1,7 @@
 import { evaluate } from "."
 import { AstNode, AstStringNode, AstVariableNode } from "../AstNodes"
 import Environment from "../Environment"
-import { VARIABLE_VALID_NAME_REGEXP } from "../InputIterator"
+import { NUMBER_REGEXP, VARIABLE_VALID_NAME_REGEXP } from "../InputIterator"
 
 export class UserRequestedError extends Error {}
 
@@ -16,7 +16,12 @@ const matchIterator = function* (string, regexp) {
   const getNextVariable = () => resultString.match(regexp)
   let match
   while ((match = getNextVariable())) {
-    resultString = resultString.replace(match[0], yield match)
+    let replacer = yield match
+    if (Array.isArray(replacer)) {
+      replacer = replacer.join(" ")
+    }
+
+    resultString = resultString.replace(match[0], replacer)
   }
   return resultString
 }
@@ -29,7 +34,7 @@ const isNumeric = (str) => /^-?[0-9]+(?:\.[0-9]+)?$/.test(str)
  * @param {Environment} env
  * @returns {string}
  */
-export const substituteVariableValues = (value, env) => {
+export const substituteParamExpansion = (value, env) => {
   let resultString = value
 
   /**
@@ -223,12 +228,19 @@ export const substituteVariableValues = (value, env) => {
    * @example echo "${name}"
    */
   const substitudeSimpleVariable = (str) => {
-    const regexp = new RegExp(`\\\${?(${VAR}+)}?`, "m")
+    const regexp = new RegExp(`\\\${?([#\!]?)(${VAR}+)}?`, "m")
     const iterator = matchIterator(str, regexp)
     let iterate = iterator.next()
     while (!iterate.done) {
-      const [, variableName] = iterate.value
-      iterate = iterator.next(evaluate(new AstVariableNode(variableName), env))
+      const [, prefix, variableName] = iterate.value
+      const value = evaluate(new AstVariableNode(variableName), env)
+      let commitValue = value
+
+      if (Array.isArray(value) && prefix === "#") {
+        commitValue = value[0]?.length || 0
+      }
+
+      iterate = iterator.next(commitValue)
     }
 
     return iterate.value
@@ -245,21 +257,93 @@ export const substituteVariableValues = (value, env) => {
     while (!iterate.done) {
       const [, variableName] = iterate.value
       const value = evaluate(new AstVariableNode(variableName), env)
-      iterate = iterator.next((value + "").length)
+
+      if (Array.isArray(value)) {
+        iterate = iterator.next(value[0].length)
+      } else {
+        iterate = iterator.next((value + "").length)
+      }
     }
 
     return iterate.value
   }
 
-  resultString = substitudeRegexpReplace(resultString)
-  resultString = substitudeSlicing(resultString)
-  resultString = substitudeSlicingRight(resultString)
-  resultString = substitudeDefaultValue(resultString)
-  resultString = substringRemoval(resultString)
-  resultString = substitudeStringManipulation(resultString)
-  /** This functions must be called last */
-  resultString = substitudeSimpleVariable(resultString)
-  resultString = substitudeVariableLength(resultString)
+  /**
+   * @see https://wiki.bash-hackers.org/syntax/pe#simple_usage
+   * @example echo "$name[0]"
+   * @example echo "${name[3]}"
+   * @example echo "${name[-1]}"
+   * @example echo "${name[@]}"
+   * @example echo "${#name[@]}"
+   * @example echo "${#name[3]}"
+   * @example echo "${#name[@]:3:2}"
+   * @example echo "${name[@]/Ap*\/}"
+   */
+  const substitudeArrayElement = (str) => {
+    const regexp = new RegExp(`\\\${?([#\!]?)(${VAR}+)\\\[(-?[0-9@]+)\\\](?:\:(-?[0-9]+)\:([0-9]+))?(?:\\\/(.+)\\\/)?}?`, "m")
+    const iterator = matchIterator(str, regexp)
+    let iterate = iterator.next()
+    while (!iterate.done) {
+      const [, prefix, variableName, index, sliceFrom, sliceLength, removeRegexp] = iterate.value
+      const value = evaluate(new AstVariableNode(variableName), env)
+      let commitValue = value
+
+      if (Array.isArray(value)) {
+        if (NUMBER_REGEXP.test(index)) {
+          if (prefix === "#") {
+            commitValue = value?.at(index)?.length || 0
+          } else {
+            commitValue = value?.at(index) || null
+          }
+        } else if (index === "@") {
+          let preparedValue = value
+          if (removeRegexp != null) {
+            try {
+              const preparedRegexp = new RegExp(`${removeRegexp.replace(/\*/g, ".*")}`)
+              preparedValue = preparedValue.filter((item) => !preparedRegexp.test(item))
+            } catch (e) {
+              throw new Error(`Invalid regexp specified: ${removeRegexp}`)
+            }
+          }
+
+          if (prefix === "#") {
+            commitValue = preparedValue.length
+          } else if (prefix === "!") {
+            commitValue = Object.keys(preparedValue)
+          } else if (sliceFrom != null && sliceLength != null) {
+            commitValue = preparedValue.slice(sliceFrom, +sliceFrom + +sliceLength)
+          } else {
+            commitValue = preparedValue
+          }
+        }
+      }
+
+      iterate = iterator.next(commitValue)
+    }
+
+    return iterate.value
+  }
+
+  const proceed = (string) => {
+    let result = string
+    result = substitudeRegexpReplace(result)
+    result = substitudeSlicing(result)
+    result = substitudeSlicingRight(result)
+    result = substitudeDefaultValue(result)
+    result = substringRemoval(result)
+    result = substitudeStringManipulation(result)
+    /** This functions must be called last */
+    result = substitudeArrayElement(result)
+    result = substitudeVariableLength(result)
+    result = substitudeSimpleVariable(result)
+    return result
+  }
+
+  // let beforeProceed
+  // do {
+  //   beforeProceed = resultString
+  resultString = proceed(resultString)
+  // } while (resultString !== beforeProceed)
 
   return resultString
 }

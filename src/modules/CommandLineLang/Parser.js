@@ -18,6 +18,7 @@ import {
   AstWhileLoopNode,
   AstBraceExpansionNode,
   AstArrayNode,
+  AstParamExpansionNode,
 } from "./AstNodes"
 import TokenIterator, { KEYWORDS } from "./TokenIterator"
 
@@ -113,18 +114,6 @@ class Parser {
   /**
    * @returns {AstProgramNode}
    */
-  parse() {
-    const prog = []
-    while (!this.#tokenIterator.isEof()) {
-      prog.push(this.#parseExpression())
-      if (!this.#tokenIterator.isEof()) this.#skipPunctuation(";")
-    }
-    return new AstProgramNode(prog)
-  }
-
-  /**
-   * @returns {AstProgramNode}
-   */
   #parseProg() {
     const prog = this.#delimited("{", "}", ";", this.#parseExpression.bind(this))
     if (prog.length == 0) return new AstBooleanNode(false)
@@ -154,9 +143,11 @@ class Parser {
       }
       if (this.#isKeyword(KEYWORDS.FOR)) return this.#parseLoop(KEYWORDS.FOR)
       if (this.#isKeyword(KEYWORDS.WHILE)) return this.#parseLoop(KEYWORDS.WHILE)
+      if (this.#isKeyword(KEYWORDS.UNSET)) return this.#parseUnsetVariable()
 
       const token = this.#tokenIterator.next()
-      if (isInstanceOf(token, [AstBraceExpansionNode, AstOperatorNode, AstVariableNode, AstNumberNode, AstStringNode])) return token
+      if (isInstanceOf(token, [AstBraceExpansionNode, AstOperatorNode, AstVariableNode, AstNumberNode, AstStringNode, AstArrayNode, AstParamExpansionNode]))
+        return token
       this.#unexpected()
     })
   }
@@ -284,6 +275,15 @@ class Parser {
   }
 
   /**
+   * @returns {AstVariableNode}
+   */
+  #parseUnsetVariable() {
+    this.#skipKeyword(KEYWORDS.UNSET)
+    const variable = this.#parseExpression()
+    return new AstAssignNode(variable, undefined)
+  }
+
+  /**
    * @returns {AstNode}
    */
   #parseExpression() {
@@ -297,7 +297,7 @@ class Parser {
   #parseCall(func) {
     let token
     let body = []
-    while ((token = this.#tokenIterator.peek()) && isInstanceOf(token, [AstBraceExpansionNode, AstVariableNode, AstStringNode, AstNumberNode])) {
+    while ((token = this.#tokenIterator.peek()) && !isInstanceOf(token, [AstPunctuationNode])) {
       body.push(token)
       token = this.#tokenIterator.next()
     }
@@ -310,7 +310,10 @@ class Parser {
   #maybeCall(expr) {
     expr = expr()
     const token = this.#tokenIterator.peek()
-    if (isInstanceOf(token, [AstBraceExpansionNode, AstVariableNode, AstNumberNode, AstStringNode])) return this.#parseCall(expr)
+    if (expr instanceof AstVariableNode && !isInstanceOf(token, [AstPunctuationNode, AstOperatorNode])) {
+      return this.#parseCall(expr)
+    }
+    // if (isInstanceOf(token, [AstVariableNode /*AstBraceExpansionNode, AstNumberNode, AstStringNode*/])) return this.#parseCall(expr())
     return expr
   }
 
@@ -386,6 +389,18 @@ class Parser {
     const token = this.#tokenIterator.peek()
     if (token && token instanceof AstOperatorNode && (!operator || token.value == operator)) return token
     return null
+  }
+
+  /**
+   * @returns {AstProgramNode}
+   */
+  parse() {
+    const prog = []
+    while (!this.#tokenIterator.isEof()) {
+      prog.push(this.#parseExpression())
+      if (!this.#tokenIterator.isEof()) this.#skipPunctuation(";")
+    }
+    return new AstProgramNode(prog)
   }
 }
 

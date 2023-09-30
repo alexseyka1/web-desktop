@@ -11,19 +11,21 @@ import {
   AstIfNode,
   AstNode,
   AstNumberNode,
+  AstParamExpansionNode,
   AstProgramNode,
   AstStringNode,
+  AstValueNode,
   AstVariableNode,
 } from "../AstNodes"
 import Environment from "../Environment"
 import { NUMBER_RANGE_REGEXP } from "../InputIterator"
 import { isInstanceOf } from "../Parser"
 import { substituteBraceExpansion } from "./branceExpansions"
-import { substituteVariableValues } from "./parameterExpansions"
+import { substituteParamExpansion } from "./parameterExpansions"
 
 const applyOperator = (op, a, b) => {
   const num = (x) => {
-    if (typeof x != "number") throw new Error("Expected number but got " + x)
+    if (typeof x != "number") throw new Error("Expected number but got " + typeof x)
     return x
   }
   const div = (x) => {
@@ -34,7 +36,14 @@ const applyOperator = (op, a, b) => {
   switch (op.value) {
     case "+":
     case "+=":
-      return num(a) + num(b)
+      if (typeof a === "number" && typeof b === "number") {
+        return numOrString(a) + numOrString(b)
+      } else if (typeof a === "string" && typeof b === "string") {
+        return `${a}${b}`
+      } else if (Array.isArray(a) && Array.isArray(b)) {
+        return a.concat(b)
+      }
+      throw new Error(`You can not sum ${typeof a} and ${typeof b}`)
     case "-":
     case "-=":
       return num(a) - num(b)
@@ -79,13 +88,17 @@ const applyOperator = (op, a, b) => {
 const makeFunction = (env, func) => {
   return function (...args) {
     const scope = env.extend()
+    scope.def("#", args.length)
+    scope.def("*", args.join(" "))
+    scope.def("@", args)
+
     for (let i = 0; i < func.args.length; ++i) {
       const token = func.args[i]
       let name = token,
         value = i < args.length ? args[i] : null
 
       if (token instanceof AstVariableNode) {
-        name = token.name
+        name = token.value
       } else if (token instanceof AstAssignNode) {
         /** Argument with default value */
         name = token.left.value
@@ -94,6 +107,11 @@ const makeFunction = (env, func) => {
 
       scope.def(name, value)
     }
+
+    for (let i = 0; i < args.length; i++) {
+      scope.def(i + 1, args[i])
+    }
+
     return evaluate(func.body, scope)
   }
 }
@@ -108,8 +126,11 @@ export const evaluate = (exp, env) => {
     case exp instanceof AstBooleanNode:
       return exp.value
     case exp instanceof AstStringNode:
-      if (exp.quote === `"`) return substituteVariableValues(exp.value, env)
+      if (exp.quote === `"`) return substituteParamExpansion(exp.value, env)
       return exp.value
+
+    case exp instanceof AstParamExpansionNode:
+      return substituteParamExpansion(exp.value, env)
 
     case exp instanceof AstBraceExpansionNode:
       return substituteBraceExpansion(exp, env)
@@ -123,6 +144,11 @@ export const evaluate = (exp, env) => {
       return result
     }
 
+    case exp instanceof AstArrayNode: {
+      if (!Array.isArray(exp.value)) return []
+      return exp.value?.map(/** @param {AstValueNode} item */ (item) => evaluate(new AstStringNode(item.value, '"'), env))
+    }
+
     case exp instanceof AstAssignNode:
       if (!(exp.left instanceof AstVariableNode)) throw new Error("Cannot assign to " + JSON.stringify(exp.left))
       if (exp.left.index == null) return env.set(exp.left.value, evaluate(exp.right, env))
@@ -130,7 +156,12 @@ export const evaluate = (exp, env) => {
       /** If variable is array */
       let leftValue = env.has(exp.left.value) ? env.get(exp.left.value) : {}
       if (typeof leftValue !== "object") leftValue = {}
-      leftValue[exp.left.index] = evaluate(exp.right, env)
+
+      if (typeof exp.right === "undefined") {
+        delete leftValue[exp.left.index]
+      } else {
+        leftValue[exp.left.index] = evaluate(exp.right, env)
+      }
       return env.set(exp.left.value, leftValue)
 
     case exp instanceof AstBinaryNode:
@@ -209,6 +240,11 @@ export const evaluate = (exp, env) => {
             _loopEnv.set(variable.value, rangeItem)
             result = evaluate(exp.body, _loopEnv)
           }
+          break
+        }
+        case exp.range instanceof AstStringNode: {
+          const range = evaluate(exp.range, env)
+          console.log({ range })
           break
         }
         case exp.range instanceof AstVariableNode && exp.range.isUse: {
