@@ -19,6 +19,7 @@ import {
   AstBraceExpansionNode,
   AstArrayNode,
   AstParamExpansionNode,
+  AstExecuteStringNode,
 } from "./AstNodes"
 import TokenIterator, { KEYWORDS } from "./TokenIterator"
 
@@ -146,7 +147,18 @@ class Parser {
       if (this.#isKeyword(KEYWORDS.UNSET)) return this.#parseUnsetVariable()
 
       const token = this.#tokenIterator.next()
-      if (isInstanceOf(token, [AstBraceExpansionNode, AstOperatorNode, AstVariableNode, AstNumberNode, AstStringNode, AstArrayNode, AstParamExpansionNode]))
+      if (
+        isInstanceOf(token, [
+          AstBraceExpansionNode,
+          AstOperatorNode,
+          AstVariableNode,
+          AstNumberNode,
+          AstExecuteStringNode,
+          AstStringNode,
+          AstArrayNode,
+          AstParamExpansionNode,
+        ])
+      )
         return token
       this.#unexpected()
     })
@@ -310,7 +322,7 @@ class Parser {
   #maybeCall(expr) {
     expr = expr()
     const token = this.#tokenIterator.peek()
-    if (expr instanceof AstVariableNode && !isInstanceOf(token, [AstPunctuationNode, AstOperatorNode])) {
+    if (expr instanceof AstVariableNode && !isInstanceOf(token, [AstKeywordNode, AstPunctuationNode, AstOperatorNode])) {
       return this.#parseCall(expr)
     }
     // if (isInstanceOf(token, [AstVariableNode /*AstBraceExpansionNode, AstNumberNode, AstStringNode*/])) return this.#parseCall(expr())
@@ -335,11 +347,10 @@ class Parser {
         const _node = token.value == "=" ? new AstAssignNode(left, right) : new AstBinaryNode(token, left, right)
         return this.#maybeBinary(_node, myPrecedence)
       }
+    } else if (left instanceof AstVariableNode && !left.isUse && !left.index && this.#isPunctuation(";")) {
+      /** Just function call without arguments */
+      return new AstCallNode(left)
     }
-    // else if (left instanceof AstVariableNode && !left.isUse && this.#isPunctuation(";")) {
-    //   /** Just function call without arguments */
-    //   return new AstCallNode(left)
-    // }
     return left
   }
 

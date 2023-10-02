@@ -3,6 +3,7 @@ import InputIterator, { BRACE_EXPANSION_REGEXP, VARIABLE_VALID_NAME_REGEXP, ARRA
 import {
   AstArrayNode,
   AstBraceExpansionNode,
+  AstExecuteStringNode,
   AstKeywordNode,
   AstNumberNode,
   AstOperatorNode,
@@ -60,8 +61,11 @@ const isFilePathStart = (char) => {
 const isFilePath = (char) => {
   return /[^;\s\t\n$]/i.test(char)
 }
-const isQuote = (char) => {
-  return /['"`]/.test(char)
+const isStringQuote = (char) => {
+  return /['"]/.test(char)
+}
+const isExecuteQuote = (char) => {
+  return char === "`"
 }
 
 /**
@@ -128,7 +132,7 @@ class TokenIterator {
 
     if (isKeyword(id)) return new AstKeywordNode(id)
     const variable = new AstVariableNode(id, prefix === "$")
-    const arrayIndexRegexp = new RegExp(`^\\\[(${VARIABLE_VALID_NAME_REGEXP.source}+)\\\]`)
+    const arrayIndexRegexp = new RegExp(`^\\\[([a-zA-Z0-9_$]+)\\\]`)
     let indexMatch
     if ((indexMatch = this.#inputIterator.getRestInput()?.match(arrayIndexRegexp))) {
       variable.index = indexMatch[1]
@@ -136,6 +140,12 @@ class TokenIterator {
     }
     return variable
   }
+
+  /**
+   * @param {string} prefix
+   * @returns {AstVariableNode}
+   */
+  readVariable(prefix) {}
 
   /**
    * @param {string} quote
@@ -177,6 +187,10 @@ class TokenIterator {
     return new AstStringNode(this.readEscaped(quote), quote)
   }
 
+  readExecuteString() {
+    return new AstExecuteStringNode(this.readEscaped("`"))
+  }
+
   readNext() {
     this.readWhile(isWhitespace)
     if (this.#inputIterator.isEof()) return null
@@ -185,14 +199,16 @@ class TokenIterator {
 
     if (isFilePathStart(char)) {
       return this.readFilePath()
-    } else if (isQuote(char)) {
+    } else if (isStringQuote(char)) {
       if (char === `"`) {
         let braceExpansion
         let paramExpansion
         if ((braceExpansion = this.#getBraceExpansion())) return braceExpansion
-        else if ((paramExpansion = this.#getParamExpansion())) return paramExpansion
+        else if ((paramExpansion = this.#getParamExpansion(true))) return paramExpansion
       }
       return this.readString(char)
+    } else if (isExecuteQuote(char)) {
+      return this.readExecuteString()
     } else if (isMinus(char)) {
       this.#hasMinus = true
       this.#inputIterator.next()
@@ -207,6 +223,9 @@ class TokenIterator {
       }
       return new AstOperatorNode(operator)
     } else if (isVariableStart(char)) {
+      let paramExpansion
+      if ((paramExpansion = this.#getParamExpansion())) return paramExpansion
+
       this.#inputIterator.next()
       return this.readIdent("$")
     } else if (isIdStart(char)) {
@@ -234,9 +253,16 @@ class TokenIterator {
    * @returns {AstParamExpansionNode|false}
    */
   #getParamExpansion() {
-    const regexp = new RegExp(`^${PARAM_EXPANSION_REGEXP.source}`, "gm")
-    if (regexp.test(this.#inputIterator.getRestInput())) {
-      return new AstParamExpansionNode(this.readEscaped(`"`))
+    const regexp = new RegExp(`^${PARAM_EXPANSION_REGEXP.source}`, "m")
+    let match
+    if ((match = this.#inputIterator.getRestInput().match(regexp))) {
+      const [fullMatch, parentheses, str] = match
+      if (typeof parentheses === "string" && parentheses.length) {
+        return new AstParamExpansionNode(this.readEscaped(parentheses))
+      } else {
+        this.#inputIterator.fastForward(fullMatch.length)
+        return new AstParamExpansionNode(str)
+      }
     }
     return false
   }

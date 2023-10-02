@@ -5,6 +5,7 @@ import {
   AstBooleanNode,
   AstBraceExpansionNode,
   AstCallNode,
+  AstExecuteStringNode,
   AstForInLoopNode,
   AstForLoopNode,
   AstFunctionNode,
@@ -18,6 +19,7 @@ import {
   AstVariableNode,
 } from "../AstNodes"
 import Environment from "../Environment"
+import { deepCopy, quickParse } from "../Helpers"
 import { NUMBER_RANGE_REGEXP } from "../InputIterator"
 import { isInstanceOf } from "../Parser"
 import { substituteBraceExpansion } from "./branceExpansions"
@@ -125,6 +127,9 @@ export const evaluate = (exp, env) => {
     case exp instanceof AstNumberNode:
     case exp instanceof AstBooleanNode:
       return exp.value
+    case exp instanceof AstExecuteStringNode:
+      const parsed = quickParse(exp.value)
+      return evaluate(parsed[0], env)
     case exp instanceof AstStringNode:
       if (exp.quote === `"`) return substituteParamExpansion(exp.value, env)
       return exp.value
@@ -146,23 +151,50 @@ export const evaluate = (exp, env) => {
 
     case exp instanceof AstArrayNode: {
       if (!Array.isArray(exp.value)) return []
-      return exp.value?.map(/** @param {AstValueNode} item */ (item) => evaluate(new AstStringNode(item.value, '"'), env))
+      /** @type {any[]} */
+      const list = exp.value?.map(
+        /** @param {AstValueNode} item */ (item) => {
+          return evaluate(new AstStringNode(item.value, '"'), env)
+        }
+      )
+
+      if (list.some((item) => !Array.isArray(item))) return list.flat()
+      return list
     }
 
     case exp instanceof AstAssignNode:
       if (!(exp.left instanceof AstVariableNode)) throw new Error("Cannot assign to " + JSON.stringify(exp.left))
-      if (exp.left.index == null) return env.set(exp.left.value, evaluate(exp.right, env))
+
+      const flattenArray = (arr) => {
+        if (Array.isArray(arr) && arr.some((item) => Array.isArray(item))) {
+          return arr.flat(1)
+        }
+        return arr
+      }
+
+      if (exp.left.index == null) {
+        const _evaluated = flattenArray(evaluate(exp.right, env))
+        return env.set(exp.left.value, deepCopy(_evaluated))
+      }
 
       /** If variable is array */
       let leftValue = env.has(exp.left.value) ? env.get(exp.left.value) : {}
       if (typeof leftValue !== "object") leftValue = {}
 
-      if (typeof exp.right === "undefined") {
-        delete leftValue[exp.left.index]
-      } else {
-        leftValue[exp.left.index] = evaluate(exp.right, env)
+      let _index = exp.left.index
+      try {
+        _index = evaluate(quickParse(exp.left.index)[0], env)
+      } catch (e) {
+        console.info("Failed to evaluate variable index.", { index: exp.left.index, e })
       }
-      return env.set(exp.left.value, leftValue)
+
+      if (typeof exp.right === "undefined") {
+        delete leftValue[_index]
+        if (Array.isArray(leftValue)) leftValue = leftValue.filter((item) => item)
+      } else {
+        leftValue[_index] = flattenArray(evaluate(exp.right, env))
+      }
+      return env.set(exp.left.value, deepCopy(leftValue))
 
     case exp instanceof AstBinaryNode:
       const result = applyOperator(exp.operator, evaluate(exp.left, env), exp?.right ? evaluate(exp.right, env) : null)
@@ -218,7 +250,7 @@ export const evaluate = (exp, env) => {
       while (getCondResult()) {
         evaluate(program, _loopEnv)
         if (steps) {
-          steps.forEach((step) => _loopEnv.set(step.left.value, evaluate(step, _loopEnv)))
+          steps.forEach((step) => _loopEnv.set(step.left.value, deepCopy(evaluate(step, _loopEnv))))
         }
       }
 
@@ -232,8 +264,16 @@ export const evaluate = (exp, env) => {
 
       switch (true) {
         case exp.range instanceof AstParamExpansionNode: {
-          const range = substituteParamExpansion(exp.range.value, _loopEnv)
-          console.log({ range })
+          let range = substituteParamExpansion(exp.range.value, _loopEnv)
+          if (!Array.isArray(range) && typeof range === "string") range = [range]
+
+          /** @type {AstVariableNode} */
+          const variable = exp.variable
+          _loopEnv.def(variable.value, null)
+          for (let rangeItem of range || []) {
+            _loopEnv.set(variable.value, deepCopy(rangeItem))
+            result = evaluate(exp.body, _loopEnv)
+          }
           break
         }
         case exp.range instanceof AstBraceExpansionNode: {
@@ -241,8 +281,8 @@ export const evaluate = (exp, env) => {
           const variable = exp.variable
           _loopEnv.def(variable.value, null)
           const range = substituteBraceExpansion(exp.range, _loopEnv)
-          for (let rangeItem of range) {
-            _loopEnv.set(variable.value, rangeItem)
+          for (let rangeItem of range || []) {
+            _loopEnv.set(variable.value, deepCopy(rangeItem))
             result = evaluate(exp.body, _loopEnv)
           }
           break
@@ -259,7 +299,7 @@ export const evaluate = (exp, env) => {
           if (typeof variableValue !== "object") throw new Error(`${exp.range.value} is not an array`)
           _loopEnv.def(variable.value, null)
           for (let rangeItem of Object.values(variableValue)) {
-            _loopEnv.set(variable.value, rangeItem)
+            _loopEnv.set(variable.value, deepCopy(rangeItem))
             result = evaluate(exp.body, _loopEnv)
           }
           break
@@ -270,7 +310,7 @@ export const evaluate = (exp, env) => {
           _loopEnv.def(variable.value, null)
           for (let rangeItem of Object.values(exp.range.value)) {
             const item = env.has(rangeItem.value) ? evaluate(rangeItem, env) : rangeItem.value
-            _loopEnv.set(variable.value, item)
+            _loopEnv.set(variable.value, deepCopy(item))
             result = evaluate(exp.body, _loopEnv)
           }
           break

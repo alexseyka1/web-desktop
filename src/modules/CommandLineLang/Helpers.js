@@ -13,3 +13,5 @@ export const quickParse = (string) => {
   const parser = new Parser(tokenIterator)
   return parser.parse().prog
 }
+
+export const deepCopy = (obj) => JSON.parse(JSON.stringify(obj))

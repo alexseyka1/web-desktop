@@ -4,6 +4,7 @@ const AST_NODE_TYPES = {
   PUNCTUATION: "punctuation",
   NUMBER: "number",
   STRING: "string",
+  EXECUTE_STRING: "execute-string",
   BOOLEAN: "boolean",
   VARIABLE: "variable",
   FUNCTION: "function",
@@ -86,6 +87,13 @@ export class AstStringNode extends AstValueNode {
   constructor(value, quote) {
     super(AST_NODE_TYPES.STRING, value)
     this.quote = quote
+  }
+}
+
+export class AstExecuteStringNode extends AstValueNode {
+  constructor(value) {
+    super(AST_NODE_TYPES.EXECUTE_STRING, value)
+    this.quote = "`"
   }
 }
 

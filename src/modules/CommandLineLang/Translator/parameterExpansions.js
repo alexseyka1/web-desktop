@@ -1,6 +1,7 @@
 import { evaluate } from "."
 import { AstNode, AstStringNode, AstVariableNode } from "../AstNodes"
 import Environment from "../Environment"
+import { quickParse } from "../Helpers"
 import { NUMBER_REGEXP, VARIABLE_VALID_NAME_REGEXP } from "../InputIterator"
 
 export class UserRequestedError extends Error {}
@@ -17,7 +18,7 @@ const matchIterator = function* (string, regexp) {
   let match
   while ((match = getNextVariable())) {
     let replacer = yield match
-    if (typeof replacer === "string") {
+    if (typeof replacer !== "object") {
       resultString = resultString.replace(match[0], replacer)
     } else {
       resultString = replacer
@@ -303,22 +304,28 @@ const substitudeVariableLength = (str, env) => {
 const substitudeArrayElement = (str, env) => {
   if (typeof str !== "string") return str
 
-  const regexp = new RegExp(`\\\${?([#\!]?)(${VAR}+)\\\[(-?[0-9@]+)\\\](?:\:(-?[0-9]+)\:([0-9]+))?(?:\\\/(.+)\\\/)?}?`, "m")
+  const regexp = new RegExp(`\\\${?([#\!]?)(${VAR}+)\\\[(-?[0-9@\*]|[a-zA-Z0-9_$]+)\\\](?:\:(-?[0-9]+)\:([0-9]+))?(?:\\\/(.+)\\\/)?}?}`, "m")
   const iterator = matchIterator(str, regexp)
   let iterate = iterator.next()
   while (!iterate.done) {
-    const [, prefix, variableName, index, sliceFrom, sliceLength, removeRegexp] = iterate.value
+    const [, prefix, variableName, _index, sliceFrom, sliceLength, removeRegexp] = iterate.value
     const value = evaluate(new AstVariableNode(variableName), env)
+
+    let index = _index
+    try {
+      index = evaluate(quickParse(_index)[0], env)
+    } catch (e) {}
+
     let commitValue = value
 
     if (Array.isArray(value)) {
-      if (NUMBER_REGEXP.test(index)) {
+      if ((index + "").match(NUMBER_REGEXP)) {
         if (prefix === "#") {
           commitValue = value?.at(index)?.length || 0
         } else {
           commitValue = value?.at(index) || null
         }
-      } else if (index === "@") {
+      } else if (["@", "*"].includes(index)) {
         let preparedValue = value
         if (removeRegexp != null) {
           try {
@@ -332,12 +339,14 @@ const substitudeArrayElement = (str, env) => {
         if (prefix === "#") {
           commitValue = preparedValue.length
         } else if (prefix === "!") {
-          commitValue = Object.keys(preparedValue)
+          commitValue = preparedValue.map((item, index) => value.indexOf(item, index))
         } else if (sliceFrom != null && sliceLength != null) {
           commitValue = preparedValue.slice(sliceFrom, +sliceFrom + +sliceLength)
         } else {
           commitValue = preparedValue
         }
+      } else {
+        commitValue = null
       }
     }
 
@@ -351,12 +360,11 @@ const substitudeArrayElement = (str, env) => {
  *
  * @param {AstNode} value
  * @param {Environment} env
- * @param {boolean} isReturnArray
+ * @param {string|null} prefix
  * @returns {string}
  */
-export const substituteParamExpansion = (value, env, isReturnArray = false) => {
+export const substituteParamExpansion = (value, env, prefix = null) => {
   let resultString = value
-  let resultArray = []
 
   const proceed = (string) => {
     let result = string
@@ -366,8 +374,8 @@ export const substituteParamExpansion = (value, env, isReturnArray = false) => {
     result = substitudeDefaultValue(result, env)
     result = substringRemoval(result, env)
     result = substitudeStringManipulation(result, env)
-    /** This functions must be called last */
-    result = substitudeArrayElement(result, env, resultArray)
+    // /** This functions must be called last */
+    result = substitudeArrayElement(result, env)
     result = substitudeVariableLength(result, env)
     result = substitudeSimpleVariable(result, env)
     return result
@@ -379,6 +387,5 @@ export const substituteParamExpansion = (value, env, isReturnArray = false) => {
   resultString = proceed(resultString)
   // } while (resultString !== beforeProceed)
 
-  if (isReturnArray) return resultArray
-  else return resultString
+  return resultString
 }
