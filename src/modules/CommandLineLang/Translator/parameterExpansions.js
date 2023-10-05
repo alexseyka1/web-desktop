@@ -252,8 +252,8 @@ const substitudeSimpleVariable = (str, env) => {
     const value = evaluate(new AstVariableNode(variableName), env)
     let commitValue = value
 
-    if (Array.isArray(value) && prefix === "#") {
-      commitValue = value[0]?.length || 0
+    if (typeof value === "object" && prefix === "#") {
+      commitValue = Object.values(value)[0]?.length || 0
     }
 
     iterate = iterator.next(commitValue)
@@ -278,8 +278,8 @@ const substitudeVariableLength = (str, env) => {
     const [, variableName] = iterate.value
     const value = evaluate(new AstVariableNode(variableName), env)
 
-    if (Array.isArray(value)) {
-      iterate = iterator.next(value[0].length)
+    if (typeof value == "object") {
+      iterate = iterator.next(Object.values(value)[0].length)
     } else {
       iterate = iterator.next((value + "").length)
     }
@@ -314,19 +314,21 @@ const substitudeArrayElement = (str, env) => {
     let index = _index
     try {
       index = evaluate(quickParse(_index)[0], env)
+      if (index == null) index = _index
     } catch (e) {}
 
     let commitValue = value
 
-    if (Array.isArray(value)) {
+    if (typeof value === "object") {
       if ((index + "").match(NUMBER_REGEXP)) {
+        const objValues = Array.isArray(value) ? value : Object.values(value)
         if (prefix === "#") {
-          commitValue = value?.at(index)?.length || 0
+          commitValue = objValues?.at(index)?.length || 0
         } else {
-          commitValue = value?.at(index) || null
+          commitValue = objValues?.at(index) || null
         }
       } else if (["@", "*"].includes(index)) {
-        let preparedValue = value
+        let preparedValue = Array.isArray(value) ? value : Object.values(value)
         if (removeRegexp != null) {
           try {
             const preparedRegexp = new RegExp(`${removeRegexp.replace(/\*/g, ".*")}`)
@@ -339,12 +341,14 @@ const substitudeArrayElement = (str, env) => {
         if (prefix === "#") {
           commitValue = preparedValue.length
         } else if (prefix === "!") {
-          commitValue = preparedValue.map((item, index) => value.indexOf(item, index))
+          commitValue = Object.keys(value)
         } else if (sliceFrom != null && sliceLength != null) {
           commitValue = preparedValue.slice(sliceFrom, +sliceFrom + +sliceLength)
         } else {
           commitValue = preparedValue
         }
+      } else if (index in value) {
+        commitValue = value[index]
       } else {
         commitValue = null
       }

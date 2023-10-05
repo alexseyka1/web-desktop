@@ -1,3 +1,9 @@
+const getRandomInt = (min, max) => {
+  min = Math.ceil(min)
+  max = Math.floor(max)
+  return Math.floor(Math.random() * (max - min + 1)) + min
+}
+
 class Environment {
   constructor(parent) {
     this.parent = parent
@@ -22,6 +28,7 @@ class Environment {
 
   get(name) {
     if (name in this.vars) return this.vars[name]
+    if (name === "RANDOM") return getRandomInt(0, 32767)
     return null
   }
 

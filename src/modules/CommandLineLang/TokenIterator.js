@@ -1,17 +1,26 @@
 import IteratorInterface from "./IteratorInterface"
-import InputIterator, { BRACE_EXPANSION_REGEXP, VARIABLE_VALID_NAME_REGEXP, ARRAY_LIST_REGEXP, NUMBER_REGEXP, PARAM_EXPANSION_REGEXP } from "./InputIterator"
+import InputIterator, {
+  BRACE_EXPANSION_REGEXP,
+  VARIABLE_VALID_NAME_REGEXP,
+  ARRAY_LIST_REGEXP,
+  NUMBER_REGEXP,
+  PARAM_EXPANSION_REGEXP,
+  NUMERIC_CALCULATION_REGEXP,
+} from "./InputIterator"
 import {
   AstArrayNode,
   AstBraceExpansionNode,
   AstExecuteStringNode,
   AstKeywordNode,
   AstNumberNode,
+  AstNumericCalculationNode,
   AstOperatorNode,
   AstParamExpansionNode,
   AstPunctuationNode,
   AstStringNode,
   AstVariableNode,
 } from "./AstNodes"
+import { quickParse } from "./Helpers"
 
 export const KEYWORDS = {
   TRUE: "true",
@@ -203,8 +212,10 @@ class TokenIterator {
       if (char === `"`) {
         let braceExpansion
         let paramExpansion
+        let numericCalculation
         if ((braceExpansion = this.#getBraceExpansion())) return braceExpansion
-        else if ((paramExpansion = this.#getParamExpansion(true))) return paramExpansion
+        else if ((paramExpansion = this.#getParamExpansion())) return paramExpansion
+        else if ((numericCalculation = this.#getNumericCalculation())) return numericCalculation
       }
       return this.readString(char)
     } else if (isExecuteQuote(char)) {
@@ -224,7 +235,9 @@ class TokenIterator {
       return new AstOperatorNode(operator)
     } else if (isVariableStart(char)) {
       let paramExpansion
+      let numericCalculation
       if ((paramExpansion = this.#getParamExpansion())) return paramExpansion
+      else if ((numericCalculation = this.#getNumericCalculation())) return numericCalculation
 
       this.#inputIterator.next()
       return this.readIdent("$")
@@ -262,6 +275,29 @@ class TokenIterator {
       } else {
         this.#inputIterator.fastForward(fullMatch.length)
         return new AstParamExpansionNode(str)
+      }
+    }
+    return false
+  }
+
+  /**
+   * @returns {AstParamExpansionNode|false}
+   */
+  #getNumericCalculation() {
+    const regexp = new RegExp(`^${NUMERIC_CALCULATION_REGEXP.source}`, "m")
+    let match
+    if ((match = this.#inputIterator.getRestInput().match(regexp))) {
+      let [fullMatch, parentheses, str] = match
+      if (typeof parentheses === "string" && parentheses.length) {
+        str = this.readEscaped(parentheses)
+      } else {
+        this.#inputIterator.fastForward(fullMatch.length)
+      }
+
+      try {
+        return quickParse(str)[0]
+      } catch (e) {
+        return false
       }
     }
     return false

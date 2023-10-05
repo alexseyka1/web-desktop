@@ -157,9 +157,12 @@ class Parser {
           AstStringNode,
           AstArrayNode,
           AstParamExpansionNode,
+          AstBinaryNode,
         ])
-      )
+      ) {
         return token
+      }
+
       this.#unexpected()
     })
   }
@@ -256,9 +259,15 @@ class Parser {
 
   #parseFunction() {
     const functionName = this.#parseVarname()
-    const vars = this.#delimited("(", ")", ",", () => {
-      return this.#maybeBinary(this.#parseAtom(), 0)
-    })
+    let vars
+    try {
+      vars = this.#delimited("(", ")", ",", () => {
+        return this.#maybeBinary(this.#parseAtom(), 0)
+      })
+    } catch (e) {
+      vars = this.#parseExpression()
+    }
+
     return new AstFunctionNode(functionName, vars, this.#parseExpression())
   }
 
@@ -309,7 +318,7 @@ class Parser {
   #parseCall(func) {
     let token
     let body = []
-    while ((token = this.#tokenIterator.peek()) && !isInstanceOf(token, [AstPunctuationNode])) {
+    while ((token = this.#tokenIterator.peek()) && !isInstanceOf(token, [AstPunctuationNode, AstOperatorNode])) {
       body.push(token)
       token = this.#tokenIterator.next()
     }
@@ -369,7 +378,7 @@ class Parser {
    */
   #skipKeyword(keyword) {
     if (this.#isKeyword(keyword)) this.#tokenIterator.next()
-    else this.#tokenIterator.throwError(`Expecting keyword: "${keyword}"`)
+    else this.#tokenIterator.throwError(`Expecting keyword: "${keyword}" but got "${JSON.stringify(this.#tokenIterator.peek())}"`)
   }
 
   /**

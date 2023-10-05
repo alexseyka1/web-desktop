@@ -10,8 +10,10 @@ import {
   AstForLoopNode,
   AstFunctionNode,
   AstIfNode,
+  AstKeywordNode,
   AstNode,
   AstNumberNode,
+  AstOperatorNode,
   AstParamExpansionNode,
   AstProgramNode,
   AstStringNode,
@@ -25,61 +27,67 @@ import { isInstanceOf } from "../Parser"
 import { substituteBraceExpansion } from "./branceExpansions"
 import { substituteParamExpansion } from "./parameterExpansions"
 
-const applyOperator = (op, a, b) => {
-  const num = (x) => {
-    if (typeof x != "number") throw new Error("Expected number but got " + typeof x)
-    return x
-  }
-  const div = (x) => {
-    if (num(x) == 0) throw new Error("Divide by zero")
-    return x
-  }
+const getApplyOperator = (env) => {
+  return (op, a, b) => {
+    const num = (x) => {
+      if (x == null) x = 0
+      if (typeof x != "number") throw new Error("Expected number but got " + typeof x)
+      return x
+    }
+    const div = (x) => {
+      if (num(x) == 0) throw new Error("Divide by zero")
+      return x
+    }
+    const ev = (obj) => evaluate(obj, env)
 
-  switch (op.value) {
-    case "+":
-    case "+=":
-      if (typeof a === "number" && typeof b === "number") {
-        return numOrString(a) + numOrString(b)
-      } else if (typeof a === "string" && typeof b === "string") {
-        return `${a}${b}`
-      } else if (Array.isArray(a) && Array.isArray(b)) {
-        return a.concat(b)
-      }
-      throw new Error(`You can not sum ${typeof a} and ${typeof b}`)
-    case "-":
-    case "-=":
-      return num(a) - num(b)
-    case "*":
-    case "*=":
-      return num(a) * num(b)
-    case "/":
-    case "/=":
-      return num(a) / div(b)
-    case "%":
-    case "%=":
-      return num(a) % div(b)
-    case "&&":
-      return a !== false && b
-    case "||":
-      return a !== false ? a : b
-    case "<":
-      return num(a) < num(b)
-    case ">":
-      return num(a) > num(b)
-    case "<=":
-      return num(a) <= num(b)
-    case ">=":
-      return num(a) >= num(b)
-    case "==":
-      return a === b
-    case "!=":
-      return a !== b
-    case "++":
-      return num(a) + 1
-    case "--":
-      return num(a) - 1
+    switch (op.value) {
+      case "+":
+      case "+=":
+        const [_a, _b] = [ev(a), ev(b)]
+        if (typeof _a === "number" && typeof _b === "number") {
+          return num(_a) + num(_b)
+        } else if (typeof _a === "string" && typeof _b === "string") {
+          return `${_a}${_b}`
+        } else if (Array.isArray(_a) && Array.isArray(_b)) {
+          return _a.concat(_b)
+        }
+        throw new Error(`You can not sum ${typeof a} and ${typeof b}`)
+      case "-":
+      case "-=":
+        return num(ev(a)) - num(ev(b))
+      case "*":
+      case "*=":
+        return num(ev(a)) * num(ev(b))
+      case "/":
+      case "/=":
+        return num(ev(a)) / div(ev(b))
+      case "%":
+      case "%=":
+        return num(ev(a)) % div(ev(b))
+      case "&&":
+        return ev(a) !== false && ev(b)
+      case "||":
+        const leftResult = ev(a)
+        return leftResult !== false ? leftResult : ev(b)
+      case "<":
+        return num(ev(a)) < num(ev(b))
+      case ">":
+        return num(ev(a)) > num(ev(b))
+      case "<=":
+        return num(ev(a)) <= num(ev(b))
+      case ">=":
+        return num(ev(a)) >= num(ev(b))
+      case "==":
+        return ev(a) === ev(b)
+      case "!=":
+        return ev(a) !== ev(b)
+      case "++":
+        return num(ev(a)) + 1
+      case "--":
+        return num(ev(a)) - 1
+    }
+    throw new Error(`Can't apply operator ${JSON.stringify(op)}`)
   }
-  throw new Error(`Can't apply operator ${JSON.stringify(op)}`)
 }
 
 /**
@@ -123,7 +131,13 @@ const makeFunction = (env, func) => {
  * @param {Environment} env
  */
 export const evaluate = (exp, env) => {
+  const applyOperator = getApplyOperator(env)
+
   switch (true) {
+    case exp instanceof AstKeywordNode:
+      return exp.value
+    case exp instanceof AstOperatorNode:
+      return null
     case exp instanceof AstNumberNode:
     case exp instanceof AstBooleanNode:
       return exp.value
@@ -152,18 +166,23 @@ export const evaluate = (exp, env) => {
     case exp instanceof AstArrayNode: {
       if (!Array.isArray(exp.value)) return []
       /** @type {any[]} */
-      const list = exp.value?.map(
-        /** @param {AstValueNode} item */ (item) => {
-          return evaluate(new AstStringNode(item.value, '"'), env)
-        }
+      const list = exp.value?.reduce(
+        /** @param {AstValueNode} item */ (res, item) => {
+          const _evaluated = evaluate(item, env)
+          return res.concat(_evaluated)
+        },
+        []
       )
 
-      if (list.some((item) => !Array.isArray(item))) return list.flat()
+      if (list.some((item) => !Array.isArray(item))) return list.flat(1)
       return list
     }
 
     case exp instanceof AstAssignNode:
-      if (!(exp.left instanceof AstVariableNode)) throw new Error("Cannot assign to " + JSON.stringify(exp.left))
+      if (!(exp.left instanceof AstVariableNode)) {
+        console.log(exp)
+        throw new Error("Cannot assign to " + JSON.stringify(exp.left))
+      }
 
       const flattenArray = (arr) => {
         if (Array.isArray(arr) && arr.some((item) => Array.isArray(item))) {
@@ -184,9 +203,8 @@ export const evaluate = (exp, env) => {
       let _index = exp.left.index
       try {
         _index = evaluate(quickParse(exp.left.index)[0], env)
-      } catch (e) {
-        console.info("Failed to evaluate variable index.", { index: exp.left.index, e })
-      }
+        if (_index == null) _index = exp.left.index
+      } catch (e) {}
 
       if (typeof exp.right === "undefined") {
         delete leftValue[_index]
@@ -197,7 +215,10 @@ export const evaluate = (exp, env) => {
       return env.set(exp.left.value, deepCopy(leftValue))
 
     case exp instanceof AstBinaryNode:
-      const result = applyOperator(exp.operator, evaluate(exp.left, env), exp?.right ? evaluate(exp.right, env) : null)
+      const result = applyOperator(exp.operator, exp.left, exp.right)
+
+      if (exp?.readOnly) return result
+      if (!(exp.left instanceof AstVariableNode)) return result
       return evaluate(new AstAssignNode(exp.left, new AstNumberNode(result)), env)
 
     case exp instanceof AstFunctionNode: {
@@ -221,22 +242,26 @@ export const evaluate = (exp, env) => {
 
     case exp instanceof AstCallNode: {
       const func = evaluate(exp.func, env)
-      if (typeof func !== "function") {
-        throw new Error(`Undefined function "${exp.func.value}"`)
+      switch (true) {
+        case typeof func === "undefined":
+        case func == null:
+          throw new Error(`Undefined function "${exp.func.value}"`)
+        case typeof func === "function":
+          const _arguments = exp.args
+            ?.map(function (arg) {
+              // if (arg instanceof AstNode) {
+              //   const resultString = substituteVariableValues(arg.value, env)
+              //   arg = new AstStringNode(resultString)
+              // }
+
+              return evaluate(arg, env)
+            })
+            .flat()
+
+          return func.apply(null, _arguments)
+        default:
+          return func
       }
-
-      const _arguments = exp.args
-        ?.map(function (arg) {
-          // if (arg instanceof AstNode) {
-          //   const resultString = substituteVariableValues(arg.value, env)
-          //   arg = new AstStringNode(resultString)
-          // }
-
-          return evaluate(arg, env)
-        })
-        .flat()
-
-      return func.apply(null, _arguments)
     }
 
     case exp instanceof AstForLoopNode: {
@@ -244,7 +269,11 @@ export const evaluate = (exp, env) => {
       const _loopEnv = env.extend()
 
       if (variables) variables.forEach((_var) => evaluate(_var, _loopEnv))
-      const getCondResult = () => conditions.reduce((res, cond) => res && evaluate(cond, _loopEnv), true)
+      const getCondResult = () =>
+        conditions.reduce((res, cond) => {
+          cond.readOnly = true
+          return res && evaluate(cond, _loopEnv)
+        }, true)
       const program = new AstProgramNode(Array.isArray(body) ? body : [body])
 
       while (getCondResult()) {
@@ -287,11 +316,11 @@ export const evaluate = (exp, env) => {
           }
           break
         }
-        case exp.range instanceof AstStringNode: {
-          const range = evaluate(exp.range, env)
-          console.log({ range })
-          break
-        }
+        // case exp.range instanceof AstStringNode: {
+        //   const range = evaluate(exp.range, env)
+        //   console.log({ range })
+        //   break
+        // }
         case exp.range instanceof AstVariableNode && exp.range.isUse: {
           /** @type {AstVariableNode} */
           const variable = exp.variable
